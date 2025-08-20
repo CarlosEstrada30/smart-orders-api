@@ -1,0 +1,27 @@
+from sqlalchemy.orm import Session
+from ..database import get_db
+from ..services.user_service import UserService
+from ..services.client_service import ClientService
+from ..services.product_service import ProductService
+from ..services.order_service import OrderService
+from ..services.auth_service import AuthService
+
+
+def get_user_service() -> UserService:
+    return UserService()
+
+
+def get_client_service() -> ClientService:
+    return ClientService()
+
+
+def get_product_service() -> ProductService:
+    return ProductService()
+
+
+def get_order_service() -> OrderService:
+    return OrderService()
+
+
+def get_auth_service() -> AuthService:
+    return AuthService() 
