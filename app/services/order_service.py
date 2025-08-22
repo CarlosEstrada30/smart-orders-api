@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from ..repositories.order_repository import OrderRepository
 from ..repositories.client_repository import ClientRepository
 from ..repositories.product_repository import ProductRepository
-from ..schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate
+from ..schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate, OrderItemResponse
 from ..models.order import Order, OrderStatus
 from .product_service import ProductService
 
@@ -15,22 +15,69 @@ class OrderService:
         self.product_repository = ProductRepository()
         self.product_service = ProductService()
 
-    def get_order(self, db: Session, order_id: int) -> Optional[Order]:
-        return self.order_repository.get(db, order_id)
+    def _process_order_items(self, order: Order) -> List[OrderItemResponse]:
+        """Process order items and populate product information"""
+        processed_items = []
+        for item in order.items:
+            item_data = {
+                "id": item.id,
+                "order_id": item.order_id,
+                "product_id": item.product_id,
+                "quantity": item.quantity,
+                "unit_price": item.unit_price,
+                "total_price": item.total_price,
+                "product_name": item.product.name if item.product else None,
+                "product_sku": item.product.sku if item.product else None,
+                "product_description": item.product.description if item.product else None
+            }
+            processed_items.append(OrderItemResponse(**item_data))
+        return processed_items
 
-    def get_order_by_number(self, db: Session, order_number: str) -> Optional[Order]:
-        return self.order_repository.get_by_order_number(db, order_number=order_number)
+    def _process_order_response(self, order: Order) -> OrderResponse:
+        """Process order and create response with complete data"""
+        # Process items
+        processed_items = self._process_order_items(order)
+        
+        # Create order response
+        order_data = {
+            "id": order.id,
+            "order_number": order.order_number,
+            "client_id": order.client_id,
+            "status": order.status,
+            "total_amount": order.total_amount,
+            "notes": order.notes,
+            "created_at": order.created_at,
+            "updated_at": order.updated_at,
+            "items": processed_items,
+            "client": order.client
+        }
+        return OrderResponse(**order_data)
 
-    def get_orders(self, db: Session, skip: int = 0, limit: int = 100) -> List[Order]:
-        return self.order_repository.get_multi(db, skip=skip, limit=limit)
+    def get_order(self, db: Session, order_id: int) -> Optional[OrderResponse]:
+        order = self.order_repository.get(db, order_id)
+        if not order:
+            return None
+        return self._process_order_response(order)
 
-    def get_orders_by_client(self, db: Session, client_id: int) -> List[Order]:
-        return self.order_repository.get_orders_by_client(db, client_id=client_id)
+    def get_order_by_number(self, db: Session, order_number: str) -> Optional[OrderResponse]:
+        order = self.order_repository.get_by_order_number(db, order_number=order_number)
+        if not order:
+            return None
+        return self._process_order_response(order)
 
-    def get_orders_by_status(self, db: Session, status: OrderStatus) -> List[Order]:
-        return self.order_repository.get_orders_by_status(db, status=status)
+    def get_orders(self, db: Session, skip: int = 0, limit: int = 100) -> List[OrderResponse]:
+        orders = self.order_repository.get_multi(db, skip=skip, limit=limit)
+        return [self._process_order_response(order) for order in orders]
 
-    def create_order(self, db: Session, order_data: OrderCreate) -> Order:
+    def get_orders_by_client(self, db: Session, client_id: int, skip: int = 0, limit: int = 100) -> List[OrderResponse]:
+        orders = self.order_repository.get_orders_by_client(db, client_id=client_id, skip=skip, limit=limit)
+        return [self._process_order_response(order) for order in orders]
+
+    def get_orders_by_status(self, db: Session, status: OrderStatus, skip: int = 0, limit: int = 100) -> List[OrderResponse]:
+        orders = self.order_repository.get_orders_by_status(db, status=status, skip=skip, limit=limit)
+        return [self._process_order_response(order) for order in orders]
+
+    def create_order(self, db: Session, order_data: OrderCreate) -> OrderResponse:
         # Validate client exists and is active
         client = self.client_repository.get(db, order_data.client_id)
         if not client or not client.is_active:
@@ -52,25 +99,21 @@ class OrderService:
 
         # Create the order
         try:
-            return self.order_repository.create_order_with_items(db, order_data=order_data)
+            order = self.order_repository.create_order_with_items(db, order_data=order_data)
+            return self._process_order_response(order)
         except Exception as e:
             # If order creation fails, restore stock
             for item in order_data.items:
                 self.product_service.update_stock(db, item.product_id, item.quantity)
             raise e
 
-    def update_order_status(self, db: Session, order_id: int, status: OrderStatus) -> Optional[Order]:
-        order = self.order_repository.get(db, order_id)
+    def update_order_status(self, db: Session, order_id: int, status: OrderStatus) -> Optional[OrderResponse]:
+        order = self.order_repository.update_order_status(db, order_id=order_id, status=status)
         if not order:
             return None
+        return self._process_order_response(order)
 
-        # Validate status transition
-        if not self._is_valid_status_transition(order.status, status):
-            raise ValueError(f"Invalid status transition from {order.status} to {status}")
-
-        return self.order_repository.update_order_status(db, order_id=order_id, status=status)
-
-    def cancel_order(self, db: Session, order_id: int) -> Optional[Order]:
+    def cancel_order(self, db: Session, order_id: int) -> Optional[OrderResponse]:
         order = self.order_repository.get(db, order_id)
         if not order:
             return None
@@ -83,7 +126,8 @@ class OrderService:
         for item in order.items:
             self.product_service.update_stock(db, item.product_id, item.quantity)
 
-        return self.order_repository.update_order_status(db, order_id=order_id, status=OrderStatus.CANCELLED)
+        updated_order = self.order_repository.update_order_status(db, order_id=order_id, status=OrderStatus.CANCELLED)
+        return self._process_order_response(updated_order)
 
     def _is_valid_status_transition(self, current_status: OrderStatus, new_status: OrderStatus) -> bool:
         """Validate if the status transition is allowed"""

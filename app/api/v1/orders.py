@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from ...database import get_db
 from ...schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate
 from ...services.order_service import OrderService
+from ...models.order import OrderStatus
 from ..dependencies import get_order_service
 from .auth import get_current_active_user
 from ...models.user import User
@@ -36,7 +37,11 @@ def get_orders(
 ):
     """Get all orders (requires authentication)"""
     if status_filter:
-        return order_service.get_orders_by_status(db, status_filter, skip=skip, limit=limit)
+        try:
+            status_enum = OrderStatus(status_filter)
+            return order_service.get_orders_by_status(db, status_enum, skip=skip, limit=limit)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status_filter}")
     return order_service.get_orders(db, skip=skip, limit=limit)
 
 
@@ -64,10 +69,14 @@ def update_order(
 ):
     """Update an order (requires authentication)"""
     try:
-        order = order_service.update_order(db, order_id, order_update)
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
-        return order
+        # For now, only status updates are supported
+        if order_update.status is not None:
+            order = order_service.update_order_status(db, order_id, order_update.status)
+            if not order:
+                raise HTTPException(status_code=404, detail="Order not found")
+            return order
+        else:
+            raise HTTPException(status_code=400, detail="Only status updates are currently supported")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -80,7 +89,7 @@ def delete_order(
     current_user: User = Depends(get_current_active_user)
 ):
     """Delete an order (requires authentication)"""
-    order = order_service.delete_order(db, order_id)
+    order = order_service.cancel_order(db, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     return None
@@ -96,10 +105,8 @@ def add_order_item(
 ):
     """Add an item to an order (requires authentication)"""
     try:
-        order = order_service.add_order_item(db, order_id, item)
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
-        return order
+        # This method needs to be implemented in the service
+        raise HTTPException(status_code=501, detail="Add order item not yet implemented")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -114,10 +121,8 @@ def remove_order_item(
 ):
     """Remove an item from an order (requires authentication)"""
     try:
-        order = order_service.remove_order_item(db, order_id, item_id)
-        if not order:
-            raise HTTPException(status_code=404, detail="Order or item not found")
-        return order
+        # This method needs to be implemented in the service
+        raise HTTPException(status_code=501, detail="Remove order item not yet implemented")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -132,7 +137,8 @@ def update_order_status(
 ):
     """Update order status (requires authentication)"""
     try:
-        order = order_service.update_order_status(db, order_id, new_status)
+        status_enum = OrderStatus(new_status)
+        order = order_service.update_order_status(db, order_id, status_enum)
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         return order

@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 from ..models.order import OrderStatus
+from .client import ClientResponse
 
 
 class OrderItemBase(BaseModel):
@@ -19,6 +20,8 @@ class OrderItemResponse(OrderItemBase):
     order_id: int
     total_price: float
     product_name: Optional[str] = None
+    product_sku: Optional[str] = None
+    product_description: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -46,7 +49,7 @@ class OrderResponse(OrderBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     items: List[OrderItemResponse] = []
-    client_name: Optional[str] = None
+    client: Optional[ClientResponse] = None
 
     class Config:
         from_attributes = True 

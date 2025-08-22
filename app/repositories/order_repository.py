@@ -1,5 +1,5 @@
 from typing import Optional, List
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from .base import BaseRepository
 from ..models.order import Order, OrderItem, OrderStatus
 from ..schemas.order import OrderCreate, OrderUpdate, OrderItemCreate
@@ -11,13 +11,34 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         super().__init__(Order)
 
     def get_by_order_number(self, db: Session, *, order_number: str) -> Optional[Order]:
-        return db.query(Order).filter(Order.order_number == order_number).first()
+        return db.query(Order).options(
+            joinedload(Order.client),
+            joinedload(Order.items).joinedload(OrderItem.product)
+        ).filter(Order.order_number == order_number).first()
 
-    def get_orders_by_client(self, db: Session, *, client_id: int) -> List[Order]:
-        return db.query(Order).filter(Order.client_id == client_id).all()
+    def get_orders_by_client(self, db: Session, *, client_id: int, skip: int = 0, limit: int = 100) -> List[Order]:
+        return db.query(Order).options(
+            joinedload(Order.client),
+            joinedload(Order.items).joinedload(OrderItem.product)
+        ).filter(Order.client_id == client_id).offset(skip).limit(limit).all()
 
-    def get_orders_by_status(self, db: Session, *, status: OrderStatus) -> List[Order]:
-        return db.query(Order).filter(Order.status == status).all()
+    def get_orders_by_status(self, db: Session, *, status: OrderStatus, skip: int = 0, limit: int = 100) -> List[Order]:
+        return db.query(Order).options(
+            joinedload(Order.client),
+            joinedload(Order.items).joinedload(OrderItem.product)
+        ).filter(Order.status == status).offset(skip).limit(limit).all()
+
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[Order]:
+        return db.query(Order).options(
+            joinedload(Order.client),
+            joinedload(Order.items).joinedload(OrderItem.product)
+        ).offset(skip).limit(limit).all()
+
+    def get(self, db: Session, id: int) -> Optional[Order]:
+        return db.query(Order).options(
+            joinedload(Order.client),
+            joinedload(Order.items).joinedload(OrderItem.product)
+        ).filter(Order.id == id).first()
 
     def create_order_with_items(self, db: Session, *, order_data: OrderCreate) -> Order:
         # Generate unique order number
@@ -49,6 +70,9 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             db.add(order_item)
         
         db.commit()
+        db.refresh(order)
+        
+        # Load relationships for the response
         db.refresh(order)
         return order
 
