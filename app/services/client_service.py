@@ -14,6 +14,9 @@ class ClientService:
 
     def get_client_by_email(self, db: Session, email: str) -> Optional[Client]:
         return self.repository.get_by_email(db, email=email)
+    
+    def get_client_by_nit(self, db: Session, nit: str) -> Optional[Client]:
+        return self.repository.get_by_nit(db, nit=nit)
 
     def get_clients(self, db: Session, skip: int = 0, limit: int = 100) -> List[Client]:
         return self.repository.get_multi(db, skip=skip, limit=limit)
@@ -25,8 +28,8 @@ class ClientService:
         return self.repository.search_by_name(db, name=name)
 
     def create_client(self, db: Session, client: ClientCreate) -> Client:
-        # Check if client with email already exists
-        if self.repository.get_by_email(db, email=client.email):
+        # Check if client with email already exists (only if email is provided)
+        if client.email and self.repository.get_by_email(db, email=client.email):
             raise ValueError("Client with this email already exists")
         
         return self.repository.create(db, obj_in=client)
@@ -38,8 +41,8 @@ class ClientService:
         
         update_data = client_update.model_dump(exclude_unset=True)
         
-        # Check if email is being updated and if it already exists
-        if "email" in update_data:
+        # Check if email is being updated and if it already exists (only if email is not None)
+        if "email" in update_data and update_data["email"]:
             existing_client = self.repository.get_by_email(db, email=update_data["email"])
             if existing_client and existing_client.id != client_id:
                 raise ValueError("Client with this email already exists")

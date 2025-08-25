@@ -16,4 +16,7 @@ class ClientRepository(BaseRepository[Client, ClientCreate, ClientUpdate]):
         return db.query(Client).filter(Client.is_active == True).offset(skip).limit(limit).all()
 
     def search_by_name(self, db: Session, *, name: str) -> List[Client]:
-        return db.query(Client).filter(Client.name.ilike(f"%{name}%")).all() 
+        return db.query(Client).filter(Client.name.ilike(f"%{name}%")).all()
+    
+    def get_by_nit(self, db: Session, *, nit: str) -> Optional[Client]:
+        return db.query(Client).filter(Client.nit == nit).first() 

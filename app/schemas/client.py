@@ -5,8 +5,9 @@ from datetime import datetime
 
 class ClientBase(BaseModel):
     name: str
-    email: EmailStr
+    email: Optional[EmailStr] = None
     phone: Optional[str] = None
+    nit: Optional[str] = None
     address: Optional[str] = None
     is_active: bool = True
 
@@ -19,6 +20,7 @@ class ClientUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
+    nit: Optional[str] = None
     address: Optional[str] = None
     is_active: Optional[bool] = None
 
