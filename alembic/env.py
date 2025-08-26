@@ -9,7 +9,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from app.database import Base
-from app.models import User, Client, Product, Order, OrderItem
+from app.models import User, Client, Product, Order, OrderItem, Route
 from app.config import settings
 
 # this is the Alembic Config object, which provides

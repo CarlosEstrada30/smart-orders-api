@@ -13,30 +13,35 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
     def get_by_order_number(self, db: Session, *, order_number: str) -> Optional[Order]:
         return db.query(Order).options(
             joinedload(Order.client),
+            joinedload(Order.route),
             joinedload(Order.items).joinedload(OrderItem.product)
         ).filter(Order.order_number == order_number).first()
 
     def get_orders_by_client(self, db: Session, *, client_id: int, skip: int = 0, limit: int = 100) -> List[Order]:
         return db.query(Order).options(
             joinedload(Order.client),
+            joinedload(Order.route),
             joinedload(Order.items).joinedload(OrderItem.product)
         ).filter(Order.client_id == client_id).offset(skip).limit(limit).all()
 
     def get_orders_by_status(self, db: Session, *, status: OrderStatus, skip: int = 0, limit: int = 100) -> List[Order]:
         return db.query(Order).options(
             joinedload(Order.client),
+            joinedload(Order.route),
             joinedload(Order.items).joinedload(OrderItem.product)
         ).filter(Order.status == status).offset(skip).limit(limit).all()
 
     def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[Order]:
         return db.query(Order).options(
             joinedload(Order.client),
+            joinedload(Order.route),
             joinedload(Order.items).joinedload(OrderItem.product)
         ).offset(skip).limit(limit).all()
 
     def get(self, db: Session, id: int) -> Optional[Order]:
         return db.query(Order).options(
             joinedload(Order.client),
+            joinedload(Order.route),
             joinedload(Order.items).joinedload(OrderItem.product)
         ).filter(Order.id == id).first()
 
@@ -51,6 +56,7 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         order = Order(
             order_number=order_number,
             client_id=order_data.client_id,
+            route_id=order_data.route_id,
             status=order_data.status,
             total_amount=total_amount,
             notes=order_data.notes

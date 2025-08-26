@@ -4,6 +4,7 @@ from ..services.user_service import UserService
 from ..services.client_service import ClientService
 from ..services.product_service import ProductService
 from ..services.order_service import OrderService
+from ..services.route_service import RouteService
 from ..services.auth_service import AuthService
 
 
@@ -21,6 +22,10 @@ def get_product_service() -> ProductService:
 
 def get_order_service() -> OrderService:
     return OrderService()
+
+
+def get_route_service() -> RouteService:
+    return RouteService()
 
 
 def get_auth_service() -> AuthService:

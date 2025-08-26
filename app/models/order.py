@@ -20,6 +20,7 @@ class Order(Base):
     id = Column(Integer, primary_key=True, index=True)
     order_number = Column(String, unique=True, index=True, nullable=False)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    route_id = Column(Integer, ForeignKey("routes.id"), nullable=True)
     status = Column(Enum(OrderStatus), default=OrderStatus.PENDING)
     total_amount = Column(Float, nullable=False)
     notes = Column(Text)
@@ -28,6 +29,7 @@ class Order(Base):
 
     # Relationships
     client = relationship("Client", back_populates="orders")
+    route = relationship("Route", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
 
 

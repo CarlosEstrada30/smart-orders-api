@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from ..repositories.order_repository import OrderRepository
 from ..repositories.client_repository import ClientRepository
 from ..repositories.product_repository import ProductRepository
+from ..repositories.route_repository import RouteRepository
 from ..schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate, OrderItemResponse
 from ..models.order import Order, OrderStatus
 from .product_service import ProductService
@@ -13,6 +14,7 @@ class OrderService:
         self.order_repository = OrderRepository()
         self.client_repository = ClientRepository()
         self.product_repository = ProductRepository()
+        self.route_repository = RouteRepository()
         self.product_service = ProductService()
 
     def _process_order_items(self, order: Order) -> List[OrderItemResponse]:
@@ -43,13 +45,15 @@ class OrderService:
             "id": order.id,
             "order_number": order.order_number,
             "client_id": order.client_id,
+            "route_id": order.route_id,
             "status": order.status,
             "total_amount": order.total_amount,
             "notes": order.notes,
             "created_at": order.created_at,
             "updated_at": order.updated_at,
             "items": processed_items,
-            "client": order.client
+            "client": order.client,
+            "route": order.route
         }
         return OrderResponse(**order_data)
 
@@ -82,6 +86,12 @@ class OrderService:
         client = self.client_repository.get(db, order_data.client_id)
         if not client or not client.is_active:
             raise ValueError("Client not found or inactive")
+        
+        # Validate route exists and is active (if provided)
+        if order_data.route_id:
+            route = self.route_repository.get(db, order_data.route_id)
+            if not route or not route.is_active:
+                raise ValueError("Route not found or inactive")
 
         # Validate all products exist, are active, and have sufficient stock
         for item in order_data.items:

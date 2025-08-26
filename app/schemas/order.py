@@ -3,6 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 from ..models.order import OrderStatus
 from .client import ClientResponse
+from .route import RouteResponse
 
 
 class OrderItemBase(BaseModel):
@@ -29,6 +30,7 @@ class OrderItemResponse(OrderItemBase):
 
 class OrderBase(BaseModel):
     client_id: int
+    route_id: Optional[int] = None
     status: OrderStatus = OrderStatus.PENDING
     notes: Optional[str] = None
 
@@ -38,6 +40,7 @@ class OrderCreate(OrderBase):
 
 
 class OrderUpdate(BaseModel):
+    route_id: Optional[int] = None
     status: Optional[OrderStatus] = None
     notes: Optional[str] = None
 
@@ -50,6 +53,7 @@ class OrderResponse(OrderBase):
     updated_at: Optional[datetime] = None
     items: List[OrderItemResponse] = []
     client: Optional[ClientResponse] = None
+    route: Optional[RouteResponse] = None
 
     class Config:
         from_attributes = True 
