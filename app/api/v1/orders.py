@@ -1,9 +1,13 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from io import BytesIO
 from ...database import get_db
 from ...schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate
+from ...schemas.invoice import CompanyInfo
 from ...services.order_service import OrderService
+from ...services.receipt_generator import ReceiptGenerator
 from ...models.order import OrderStatus
 from ..dependencies import get_order_service
 from .auth import get_current_active_user
@@ -157,4 +161,165 @@ def get_orders_by_client(
 ):
     """Get orders by client ID (requires authentication)"""
     orders = order_service.get_orders_by_client(db, client_id, skip=skip, limit=limit)
-    return orders 
+    return orders
+
+
+# ===== COMPROBANTES DE ÓRDENES =====
+
+@router.get("/{order_id}/receipt", response_class=StreamingResponse)
+def download_order_receipt(
+    order_id: int,
+    db: Session = Depends(get_db),
+    order_service: OrderService = Depends(get_order_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Download order receipt/voucher PDF (requires authentication)"""
+    try:
+        # Get order
+        order = order_service.get_order(db, order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Create receipt generator
+        receipt_generator = ReceiptGenerator()
+        
+        # Company info (should be configurable)
+        company_info = CompanyInfo(
+            name="Smart Orders Guatemala",
+            address="Zona 10, Ciudad de Guatemala, Guatemala",
+            phone="+502 2222-3333",
+            email="comprobantes@smartorders.gt",
+            nit="12345678-9"
+        )
+        
+        # Get order object for PDF generation
+        from ...repositories.order_repository import OrderRepository
+        order_repo = OrderRepository()
+        order_obj = order_repo.get(db, order_id)
+        
+        if not order_obj:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Generate PDF buffer
+        pdf_buffer = receipt_generator.generate_receipt_buffer(order_obj, company_info)
+        
+        # Set filename
+        filename = f"comprobante_pedido_{order_obj.order_number}.pdf"
+        
+        # Return as streaming response
+        return StreamingResponse(
+            BytesIO(pdf_buffer.getvalue()),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating receipt: {str(e)}")
+
+
+@router.get("/{order_id}/receipt/preview", response_class=StreamingResponse)
+def preview_order_receipt(
+    order_id: int,
+    db: Session = Depends(get_db),
+    order_service: OrderService = Depends(get_order_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Preview order receipt PDF in browser (requires authentication)"""
+    try:
+        # Get order
+        order = order_service.get_order(db, order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Create receipt generator
+        receipt_generator = ReceiptGenerator()
+        
+        # Company info
+        company_info = CompanyInfo(
+            name="Smart Orders Guatemala",
+            address="Zona 10, Ciudad de Guatemala, Guatemala", 
+            phone="+502 2222-3333",
+            email="comprobantes@smartorders.gt",
+            nit="12345678-9"
+        )
+        
+        # Get order object for PDF generation
+        from ...repositories.order_repository import OrderRepository
+        order_repo = OrderRepository()
+        order_obj = order_repo.get(db, order_id)
+        
+        if not order_obj:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Generate PDF buffer
+        pdf_buffer = receipt_generator.generate_receipt_buffer(order_obj, company_info)
+        
+        # Return as inline PDF (for preview in browser)
+        return StreamingResponse(
+            BytesIO(pdf_buffer.getvalue()),
+            media_type="application/pdf",
+            headers={"Content-Disposition": "inline"}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating receipt: {str(e)}")
+
+
+@router.post("/{order_id}/receipt/generate")
+def generate_order_receipt_file(
+    order_id: int,
+    db: Session = Depends(get_db),
+    order_service: OrderService = Depends(get_order_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Generate and save order receipt PDF file (requires authentication)"""
+    try:
+        # Get order
+        order = order_service.get_order(db, order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Create receipt generator
+        receipt_generator = ReceiptGenerator()
+        
+        # Company info
+        company_info = CompanyInfo(
+            name="Smart Orders Guatemala",
+            address="Zona 10, Ciudad de Guatemala, Guatemala",
+            phone="+502 2222-3333", 
+            email="comprobantes@smartorders.gt",
+            nit="12345678-9"
+        )
+        
+        # Get order object for PDF generation
+        from ...repositories.order_repository import OrderRepository
+        order_repo = OrderRepository()
+        order_obj = order_repo.get(db, order_id)
+        
+        if not order_obj:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Create receipts directory if it doesn't exist
+        import os
+        receipts_dir = "receipts"
+        os.makedirs(receipts_dir, exist_ok=True)
+        
+        # Generate filename
+        filename = f"comprobante_{order_obj.order_number}_{order_obj.created_at.strftime('%Y%m%d_%H%M%S')}.pdf"
+        file_path = os.path.join(receipts_dir, filename)
+        
+        # Generate PDF file
+        receipt_generator.generate_order_receipt(order_obj, company_info, file_path)
+        
+        return {
+            "message": "Receipt generated successfully",
+            "file_path": file_path,
+            "order_id": order_id,
+            "order_number": order_obj.order_number
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating receipt: {str(e)}") 
