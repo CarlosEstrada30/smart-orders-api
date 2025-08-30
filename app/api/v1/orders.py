@@ -12,6 +12,7 @@ from ...models.order import OrderStatus
 from ..dependencies import get_order_service
 from .auth import get_current_active_user
 from ...models.user import User
+from ...utils.permissions import can_create_orders, can_view_orders, can_update_delivery_status
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -23,7 +24,14 @@ def create_order(
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Create a new order (requires authentication)"""
+    """Create a new order (requires sales+ role)"""
+    # Verificar permisos
+    if not can_create_orders(current_user):
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes permisos para crear pedidos. Se requiere rol de Vendedor o superior."
+        )
+    
     try:
         return order_service.create_order(db, order)
     except ValueError as e:
@@ -39,7 +47,14 @@ def get_orders(
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Get all orders (requires authentication)"""
+    """Get all orders (requires view orders permission)"""
+    # Verificar permisos
+    if not can_view_orders(current_user):
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes permisos para ver pedidos."
+        )
+    
     if status_filter:
         try:
             status_enum = OrderStatus(status_filter)
@@ -139,9 +154,25 @@ def update_order_status(
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Update order status (requires authentication)"""
+    """Update order status (requires appropriate permissions)"""
     try:
         status_enum = OrderStatus(new_status)
+        
+        # Validación especial para repartidores
+        if status_enum == OrderStatus.DELIVERED:
+            if not can_update_delivery_status(current_user):
+                raise HTTPException(
+                    status_code=403, 
+                    detail="No tienes permisos para marcar pedidos como entregados. Se requiere rol de Repartidor o superior."
+                )
+        else:
+            # Para otros cambios de estado, requiere permisos de gestión
+            if not can_create_orders(current_user):
+                raise HTTPException(
+                    status_code=403, 
+                    detail="No tienes permisos para cambiar el estado de pedidos. Se requiere rol de Vendedor o superior."
+                )
+        
         order = order_service.update_order_status(db, order_id, status_enum)
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")

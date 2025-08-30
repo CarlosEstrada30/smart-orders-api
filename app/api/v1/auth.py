@@ -7,6 +7,7 @@ from ...schemas.auth import Token, LoginRequest
 from ...services.auth_service import AuthService
 from ...services.user_service import UserService
 from ...models.user import User
+from ...utils.permissions import get_user_permissions
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 security = HTTPBearer()
@@ -78,5 +79,12 @@ def get_current_user_info(current_user: User = Depends(get_current_active_user))
         "username": current_user.username,
         "full_name": current_user.full_name,
         "is_active": current_user.is_active,
-        "is_superuser": current_user.is_superuser
-    } 
+        "is_superuser": current_user.is_superuser,
+        "role": current_user.role.value if current_user.role else "employee"
+    }
+
+
+@router.get("/permissions", response_model=dict)
+def get_current_user_permissions(current_user: User = Depends(get_current_active_user)):
+    """Get current user permissions for frontend"""
+    return get_user_permissions(current_user) 

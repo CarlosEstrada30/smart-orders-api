@@ -14,6 +14,7 @@ from ...models.inventory_entry import EntryType, EntryStatus
 from ..dependencies import get_inventory_entry_service
 from .auth import get_current_active_user
 from ...models.user import User
+from ...utils.permissions import can_approve_inventory, can_complete_inventory
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -134,7 +135,14 @@ def approve_inventory_entry(
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Approve an inventory entry (requires authentication)"""
+    """Approve an inventory entry (requires supervisor+ role)"""
+    # Verificar permisos
+    if not can_approve_inventory(current_user):
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes permisos para aprobar entradas de inventario. Se requiere rol de Supervisor o superior."
+        )
+    
     try:
         entry = inventory_service.approve_entry(db, entry_id)
         if not entry:
@@ -151,7 +159,14 @@ def complete_inventory_entry(
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Complete an inventory entry and update stock (requires authentication)"""
+    """Complete an inventory entry and update stock (requires supervisor+ role)"""
+    # Verificar permisos
+    if not can_complete_inventory(current_user):
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes permisos para completar entradas de inventario. Se requiere rol de Supervisor o superior."
+        )
+    
     try:
         entry = inventory_service.complete_entry(db, entry_id)
         if not entry:
