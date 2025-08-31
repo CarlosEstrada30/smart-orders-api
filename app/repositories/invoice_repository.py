@@ -26,10 +26,15 @@ class InvoiceRepository(BaseRepository[Invoice, InvoiceCreate, InvoiceUpdate]):
         ).filter(Invoice.order_id == order_id).first()
 
     def get_invoices_by_status(self, db: Session, *, status: InvoiceStatus, skip: int = 0, limit: int = 100) -> List[Invoice]:
+        from sqlalchemy import text
+        
+        # Use raw SQL for status filtering to avoid enum mapping issues
+        status_value = status.value if hasattr(status, 'value') else str(status)
+        
         return db.query(Invoice).options(
             joinedload(Invoice.order).joinedload(Order.client),
-            joinedload(Invoice.order).joinedload(Order.items).joinedload(OrderItem.product)
-        ).filter(Invoice.status == status).offset(skip).limit(limit).all()
+            joinedload(Invoice.order).joinedload(Order.items).joinedload(OrderItem.product)  
+        ).filter(text("invoices.status = :status")).params(status=status_value).offset(skip).limit(limit).all()
 
     def get_invoices_by_client(self, db: Session, *, client_id: int, skip: int = 0, limit: int = 100) -> List[Invoice]:
         return db.query(Invoice).options(
@@ -120,17 +125,33 @@ class InvoiceRepository(BaseRepository[Invoice, InvoiceCreate, InvoiceUpdate]):
         return invoice
 
     def update_invoice_status(self, db: Session, *, invoice_id: int, status: InvoiceStatus) -> Optional[Invoice]:
-        invoice = self.get(db, invoice_id)
-        if invoice:
-            invoice.status = status
-            
-            # Auto-update overdue status
-            if status == InvoiceStatus.ISSUED and invoice.due_date and invoice.due_date < datetime.now():
-                invoice.status = InvoiceStatus.OVERDUE
-            
+        from sqlalchemy import text
+        
+        # Use raw SQL to avoid SQLAlchemy enum issues
+        status_value = status.value if hasattr(status, 'value') else str(status)
+        
+        # Update with raw SQL
+        result = db.execute(
+            text("UPDATE invoices SET status = :status, updated_at = now() WHERE id = :id"),
+            {"status": status_value, "id": invoice_id}
+        )
+        
+        if result.rowcount > 0:
             db.commit()
-            db.refresh(invoice)
-        return invoice
+            # Get updated invoice
+            invoice = self.get(db, invoice_id)
+            
+            # Handle overdue logic if needed
+            if status == InvoiceStatus.ISSUED and invoice and invoice.due_date and invoice.due_date < datetime.now():
+                db.execute(
+                    text("UPDATE invoices SET status = :status WHERE id = :id"),
+                    {"status": InvoiceStatus.OVERDUE.value, "id": invoice_id}
+                )
+                db.commit()
+                invoice = self.get(db, invoice_id)
+            
+            return invoice
+        return None
 
     def record_payment(self, db: Session, *, invoice_id: int, payment_amount: float, payment_date: Optional[datetime] = None) -> Optional[Invoice]:
         invoice = self.get(db, invoice_id)

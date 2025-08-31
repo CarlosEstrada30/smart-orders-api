@@ -9,7 +9,7 @@ from io import BytesIO
 from ...database import get_db
 from ...schemas.invoice import (
     InvoiceCreate, InvoiceUpdate, InvoiceResponse, InvoiceListResponse,
-    InvoiceSummary, PaymentCreate, InvoicePDFRequest
+    InvoiceSummary, PaymentCreate, InvoicePDFRequest, FELProcessRequest, FELProcessResponse
 )
 from ...services.invoice_service import InvoiceService
 from ...models.invoice import InvoiceStatus
@@ -303,3 +303,159 @@ def preview_invoice_pdf(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")
+
+
+# FEL (Facturación Electrónica en Línea) - Guatemala Endpoints
+@router.post("/{invoice_id}/fel/process", response_model=FELProcessResponse)
+def process_invoice_fel(
+    invoice_id: int,
+    certifier: str = Query(default="digifact", description="FEL certifier to use (digifact, facturasgt)"),
+    db: Session = Depends(get_db),
+    invoice_service: InvoiceService = Depends(get_invoice_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Process invoice through FEL (Guatemala electronic invoicing) (requires authentication)"""
+    try:
+        result = invoice_service.process_fel_for_invoice(db, invoice_id, certifier)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing FEL: {str(e)}")
+
+
+@router.post("/orders/{order_id}/auto-invoice-with-fel", response_model=InvoiceResponse)
+def auto_create_invoice_with_fel(
+    order_id: int,
+    certifier: str = Query(default="digifact", description="FEL certifier to use"),
+    db: Session = Depends(get_db),
+    invoice_service: InvoiceService = Depends(get_invoice_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Auto-create invoice for delivered order and process FEL (requires authentication)"""
+    try:
+        invoice = invoice_service.auto_create_invoice_for_order(db, order_id, requires_fel=True)
+        if not invoice:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot create invoice for this order. Order must be delivered and not have existing invoice."
+            )
+        return invoice
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/orders/{order_id}/receipt-only")
+def create_receipt_only(
+    order_id: int,
+    db: Session = Depends(get_db),
+    invoice_service: InvoiceService = Depends(get_invoice_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Process delivered order with receipt only (no FEL invoice) (requires authentication)"""
+    try:
+        result = invoice_service.create_receipt_only_order_process(db, order_id)
+        
+        # Return receipt as download
+        return StreamingResponse(
+            BytesIO(result["document_buffer"].getvalue()),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=comprobante_{result['order_number']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating receipt: {str(e)}")
+
+
+@router.post("/fel/retry-failed")
+def retry_failed_fel_processing(
+    certifier: str = Query(default="digifact", description="FEL certifier to use"),
+    db: Session = Depends(get_db),
+    invoice_service: InvoiceService = Depends(get_invoice_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Retry FEL processing for failed invoices (maintenance endpoint) (requires authentication)"""
+    try:
+        result = invoice_service.retry_fel_processing(db, certifier)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrying FEL processing: {str(e)}")
+
+
+@router.get("/fel/status-summary")
+def get_fel_status_summary(
+    db: Session = Depends(get_db),
+    invoice_service: InvoiceService = Depends(get_invoice_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get FEL processing status summary (requires authentication)"""
+    try:
+        summary = invoice_service.get_fel_status_summary(db)
+        return summary
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting FEL summary: {str(e)}")
+
+
+@router.get("/revenue/fiscal")
+def get_fiscal_revenue(
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    invoice_service: InvoiceService = Depends(get_invoice_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get fiscal revenue (only FEL-authorized invoices) (requires authentication)"""
+    try:
+        from datetime import datetime
+        from sqlalchemy import func, text
+        from ...models.invoice import Invoice
+        
+        # Parse dates if provided
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d') if start_date else None
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d') if end_date else None
+        
+        # Get the enum values to avoid mapping issues
+        fel_authorized = InvoiceStatus.FEL_AUTHORIZED.value
+        issued = InvoiceStatus.ISSUED.value 
+        paid = InvoiceStatus.PAID.value
+        
+        # Query for FEL-authorized invoices using raw SQL for status filtering
+        query = db.query(
+            func.sum(Invoice.total_amount).label('total_invoiced'),
+            func.sum(Invoice.paid_amount).label('total_collected'),
+            func.count(Invoice.id).label('total_invoices')
+        ).filter(
+            text("invoices.status IN (:fel_auth, :issued, :paid)").params(
+                fel_auth=fel_authorized, issued=issued, paid=paid
+            ),
+            Invoice.fel_uuid.isnot(None)
+        )
+        
+        if start_dt:
+            query = query.filter(Invoice.issue_date >= start_dt)
+        if end_dt:
+            query = query.filter(Invoice.issue_date <= end_dt)
+        
+        result = query.first()
+        
+        return {
+            "period": {
+                "start_date": start_date,
+                "end_date": end_date
+            },
+            "fiscal_revenue": {
+                "total_invoiced": float(result.total_invoiced or 0),
+                "total_collected": float(result.total_collected or 0),
+                "total_invoices": result.total_invoices or 0,
+                "average_invoice": float(result.total_invoiced or 0) / max(result.total_invoices or 1, 1),
+                "collection_rate": float(result.total_collected or 0) / max(float(result.total_invoiced or 0), 1) * 100
+            },
+            "note": "Only includes FEL-authorized invoices (fiscally valid)"
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error calculating fiscal revenue: {str(e)}")

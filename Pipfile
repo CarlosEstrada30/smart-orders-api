@@ -21,6 +21,7 @@ weasyprint = "*"
 jinja2 = "*"
 aiofiles = "*"
 reportlab = "==3.6.0"
+requests = "*"
 
 [dev-packages]
 pytest = "*"

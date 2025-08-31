@@ -9,11 +9,12 @@ from ..repositories.invoice_repository import InvoiceRepository
 from ..repositories.order_repository import OrderRepository
 from ..schemas.invoice import (
     InvoiceCreate, InvoiceUpdate, InvoiceResponse, InvoiceListResponse,
-    InvoiceSummary, PaymentCreate, CompanyInfo
+    InvoiceSummary, PaymentCreate, CompanyInfo, FELProcessRequest, FELProcessResponse
 )
 from ..models.invoice import Invoice, InvoiceStatus, PaymentMethod
 from ..models.order import OrderStatus
 from .simple_pdf_generator import SimplePDFGenerator
+from .fel_service import FELService
 
 
 class InvoiceService:
@@ -21,6 +22,7 @@ class InvoiceService:
         self.invoice_repository = InvoiceRepository()
         self.order_repository = OrderRepository()
         self.pdf_generator = SimplePDFGenerator()
+        self.fel_service = FELService()
         self.pdf_storage_path = "invoices/pdfs"  # Configurable
         
         # Default company info (should be configurable)
@@ -216,7 +218,7 @@ class InvoiceService:
         """Mark invoices as overdue (useful for scheduled tasks)"""
         return self.invoice_repository.mark_overdue_invoices(db)
 
-    def auto_create_invoice_for_order(self, db: Session, order_id: int) -> Optional[InvoiceResponse]:
+    def auto_create_invoice_for_order(self, db: Session, order_id: int, requires_fel: bool = True) -> Optional[InvoiceResponse]:
         """Automatically create invoice when order is delivered"""
         order = self.order_repository.get(db, order_id)
         if not order:
@@ -238,10 +240,62 @@ class InvoiceService:
             discount_amount=0.0,
             due_date=datetime.now() + timedelta(days=30),
             payment_terms="Pago contra entrega",
-            notes="Factura generada automáticamente"
+            notes="Factura generada automáticamente",
+            requires_fel=requires_fel
         )
         
-        return self.create_invoice_from_order(db, order_id, invoice_data)
+        # Create the invoice
+        invoice_response = self.create_invoice_from_order(db, order_id, invoice_data)
+        
+        # If requires FEL, process it automatically
+        if requires_fel and invoice_response:
+            fel_result = self.process_fel_for_invoice(db, invoice_response.id)
+            # Return updated invoice response
+            return self.get_invoice(db, invoice_response.id)
+        
+        return invoice_response
+
+    def process_fel_for_invoice(self, db: Session, invoice_id: int, certifier: str = "digifact") -> FELProcessResponse:
+        """Process FEL for an existing invoice"""
+        return self.fel_service.process_fel_authorization(db, invoice_id, certifier)
+    
+    def retry_fel_processing(self, db: Session, certifier: str = "digifact") -> dict:
+        """Retry FEL processing for failed invoices"""
+        return self.fel_service.retry_failed_fel_processing(db, certifier)
+    
+    def get_fel_status_summary(self, db: Session) -> dict:
+        """Get FEL status summary"""
+        return self.fel_service.get_fel_status_summary(db)
+    
+    def create_receipt_only_order_process(self, db: Session, order_id: int) -> dict:
+        """Process delivered order with receipt only (no FEL invoice)"""
+        order = self.order_repository.get(db, order_id)
+        if not order:
+            raise ValueError(f"Order {order_id} not found")
+        
+        if order.status != OrderStatus.DELIVERED:
+            raise ValueError("Order must be delivered to generate receipt")
+        
+        # Check if invoice already exists
+        existing_invoice = self.invoice_repository.get_by_order_id(db, order_id=order_id)
+        if existing_invoice:
+            raise ValueError(f"Invoice already exists for order {order_id}. Use receipt endpoint instead.")
+        
+        # Generate receipt (using existing receipt generator)
+        from .receipt_generator import ReceiptGenerator
+        receipt_generator = ReceiptGenerator()
+        
+        # Generate receipt buffer
+        receipt_buffer = receipt_generator.generate_receipt_buffer(order, self.company_info)
+        
+        return {
+            "type": "receipt",
+            "order_id": order_id,
+            "order_number": order.order_number,
+            "document_buffer": receipt_buffer,
+            "fiscal_valid": False,
+            "message": "Receipt generated successfully. No FEL processing required."
+        }
 
     def _process_invoice_response(self, invoice: Invoice) -> InvoiceResponse:
         """Process invoice and create response with complete data"""

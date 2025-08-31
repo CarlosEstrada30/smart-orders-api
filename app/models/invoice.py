@@ -6,11 +6,14 @@ from ..database import Base
 
 
 class InvoiceStatus(str, enum.Enum):
-    DRAFT = "draft"
-    ISSUED = "issued"
-    PAID = "paid"
-    OVERDUE = "overdue"
-    CANCELLED = "cancelled"
+    DRAFT = "DRAFT"                    # Borrador
+    FEL_PENDING = "fel_pending"        # Enviando a FEL
+    FEL_AUTHORIZED = "fel_authorized"  # Autorizada por SAT
+    FEL_REJECTED = "fel_rejected"      # Rechazada por SAT
+    ISSUED = "ISSUED"                  # Emitida oficialmente (con FEL)
+    PAID = "PAID"                      # Pagada
+    OVERDUE = "OVERDUE"                # Vencida
+    CANCELLED = "CANCELLED"            # Anulada
 
 
 class PaymentMethod(str, enum.Enum):
@@ -42,6 +45,18 @@ class Invoice(Base):
     # Payment tracking
     paid_amount = Column(Float, default=0.0)
     balance_due = Column(Float, nullable=False)
+    
+    # FEL (Facturación Electrónica en Línea) - Guatemala
+    fel_uuid = Column(String, nullable=True, index=True)               # UUID de SAT
+    dte_number = Column(String, nullable=True, index=True)             # Número DTE
+    fel_authorization_date = Column(DateTime(timezone=True), nullable=True)
+    fel_xml_path = Column(String, nullable=True)                      # XML generado
+    fel_certification_date = Column(DateTime(timezone=True), nullable=True)
+    fel_certifier = Column(String, nullable=True)                     # Certificador usado (ej: FacturasGT, Digifact)
+    fel_series = Column(String, nullable=True)                        # Serie FEL
+    fel_number = Column(String, nullable=True)                        # Número FEL
+    fel_error_message = Column(Text, nullable=True)                   # Error FEL si aplica
+    requires_fel = Column(Boolean, default=True)                      # Si requiere procesamiento FEL
     
     # Dates
     issue_date = Column(DateTime(timezone=True), server_default=func.now())

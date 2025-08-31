@@ -1,0 +1,57 @@
+<?xml version="1.0" ?>
+<dte:GTDocumento xmlns:dte="http://www.sat.gob.gt/dte/fel/0.2.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Version="0.1" xsi:schemaLocation="http://www.sat.gob.gt/dte/fel/0.2.0">
+  <dte:SAT ClaseDocumento="dte">
+    <dte:DTE ID="DatosCertificados">
+      <dte:DatosEmision ID="DatosEmision">
+        <dte:DatosGenerales CodigoMoneda="GTQ" FechaHoraEmision="2025-08-28T18:33:49.734320-06:00" NumeroDocumento="INV-041BA847" Tipo="FACT"/>
+        <dte:Emisor AfiliacionIVA="GEN" CodigoEstablecimiento="1" CorreoEmisor="facturacion@smartorders.gt" NITEmisor="12345678-9" NombreComercial="Smart Orders Guatemala" NombreEmisor="Smart Orders Guatemala">
+          <dte:DireccionEmisor Departamento="Guatemala" Direccion="Zona 10, Ciudad de Guatemala" Municipio="Guatemala" CodigoPais="GT" CodigoPostal="01010"/>
+        </dte:Emisor>
+        <dte:Receptor CorreoReceptor="Maria@gmail.com" IDReceptor="" NombreReceptor="Maria">
+          <dte:DireccionReceptor Departamento="Guatemala" Direccion="Patulul" Municipio="Guatemala" CodigoPais="GT" CodigoPostal="01010"/>
+        </dte:Receptor>
+        <dte:Frases>
+          <dte:Frase CodigoEscenario="1" TipoFrase="1"/>
+        </dte:Frases>
+        <dte:Items>
+          <dte:Item BienOServicio="B" NumeroLinea="1">
+            <dte:Cantidad>2</dte:Cantidad>
+            <dte:Descripcion>Queso de pita</dte:Descripcion>
+            <dte:PrecioUnitario>99.99</dte:PrecioUnitario>
+            <dte:Precio>199.98</dte:Precio>
+            <dte:Descuento>0.00</dte:Descuento>
+            <dte:Impuestos>
+              <dte:Impuesto>
+                <dte:NombreCorto>IVA</dte:NombreCorto>
+                <dte:CodigoUnidadGravable>1</dte:CodigoUnidadGravable>
+                <dte:MontoGravable>199.98</dte:MontoGravable>
+                <dte:MontoImpuesto>24.00</dte:MontoImpuesto>
+              </dte:Impuesto>
+            </dte:Impuestos>
+          </dte:Item>
+          <dte:Item BienOServicio="B" NumeroLinea="2">
+            <dte:Cantidad>10</dte:Cantidad>
+            <dte:Descripcion>Queso Crema HOY</dte:Descripcion>
+            <dte:PrecioUnitario>5.08</dte:PrecioUnitario>
+            <dte:Precio>50.80</dte:Precio>
+            <dte:Descuento>0.00</dte:Descuento>
+            <dte:Impuestos>
+              <dte:Impuesto>
+                <dte:NombreCorto>IVA</dte:NombreCorto>
+                <dte:CodigoUnidadGravable>1</dte:CodigoUnidadGravable>
+                <dte:MontoGravable>50.80</dte:MontoGravable>
+                <dte:MontoImpuesto>6.10</dte:MontoImpuesto>
+              </dte:Impuesto>
+            </dte:Impuestos>
+          </dte:Item>
+        </dte:Items>
+        <dte:Totales>
+          <dte:TotalImpuestos>
+            <dte:TotalImpuesto NombreCorto="IVA" TotalMontoImpuesto="30.09"/>
+          </dte:TotalImpuestos>
+          <dte:GranTotal>280.87</dte:GranTotal>
+        </dte:Totales>
+      </dte:DatosEmision>
+    </dte:DTE>
+  </dte:SAT>
+</dte:GTDocumento>

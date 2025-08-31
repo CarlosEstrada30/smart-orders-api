@@ -25,18 +25,25 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         ).filter(Order.client_id == client_id).offset(skip).limit(limit).all()
 
     def get_orders_by_status(self, db: Session, *, status: OrderStatus, skip: int = 0, limit: int = 100) -> List[Order]:
+        from sqlalchemy import text
+        
+        # Use raw SQL for status filtering to avoid enum mapping issues
+        # Convert to uppercase to match database values (DB has UPPERCASE, Python enum has lowercase)
+        status_value = status.value if hasattr(status, 'value') else str(status)
+        status_value_upper = status_value.upper()
+        
         return db.query(Order).options(
             joinedload(Order.client),
             joinedload(Order.route),
             joinedload(Order.items).joinedload(OrderItem.product)
-        ).filter(Order.status == status).offset(skip).limit(limit).all()
+        ).filter(text("orders.status = :status")).params(status=status_value_upper).offset(skip).limit(limit).all()
 
     def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[Order]:
         return db.query(Order).options(
             joinedload(Order.client),
             joinedload(Order.route),
             joinedload(Order.items).joinedload(OrderItem.product)
-        ).offset(skip).limit(limit).all()
+        ).order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
 
     def get(self, db: Session, id: int) -> Optional[Order]:
         return db.query(Order).options(

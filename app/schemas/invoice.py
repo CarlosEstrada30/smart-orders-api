@@ -15,7 +15,7 @@ class InvoiceBase(BaseModel):
 
 
 class InvoiceCreate(InvoiceBase):
-    pass
+    requires_fel: bool = Field(default=True, description="Whether this invoice requires FEL processing")
 
 
 class InvoiceUpdate(BaseModel):
@@ -46,6 +46,18 @@ class InvoiceResponse(InvoiceBase):
     total_amount: float
     paid_amount: float
     balance_due: float
+    
+    # FEL (Facturación Electrónica en Línea) - Guatemala
+    fel_uuid: Optional[str] = None
+    dte_number: Optional[str] = None
+    fel_authorization_date: Optional[datetime] = None
+    fel_xml_path: Optional[str] = None
+    fel_certification_date: Optional[datetime] = None
+    fel_certifier: Optional[str] = None
+    fel_series: Optional[str] = None
+    fel_number: Optional[str] = None
+    fel_error_message: Optional[str] = None
+    requires_fel: bool = True
     
     # Dates
     issue_date: datetime
@@ -117,3 +129,40 @@ class CompanyInfo(BaseModel):
     email: str = "contacto@smartorders.gt"
     nit: str = "12345678-9"
     logo_path: Optional[str] = None
+
+
+# FEL (Facturación Electrónica en Línea) - Guatemala Schemas
+class FELProcessRequest(BaseModel):
+    """Request to process invoice through FEL"""
+    invoice_id: int
+    certifier: str = Field(default="digifact", description="FEL certifier to use")
+    force_reprocess: bool = Field(default=False, description="Force reprocess even if already processed")
+
+
+class FELProcessResponse(BaseModel):
+    """Response from FEL processing"""
+    success: bool
+    invoice_id: int
+    status: InvoiceStatus
+    fel_uuid: Optional[str] = None
+    dte_number: Optional[str] = None
+    fel_series: Optional[str] = None
+    fel_number: Optional[str] = None
+    error_message: Optional[str] = None
+    processed_at: datetime
+    certifier: Optional[str] = None
+
+
+class FELConfiguration(BaseModel):
+    """Configuration for FEL certifier"""
+    certifier_name: str = Field(..., description="Name of the FEL certifier")
+    base_url: str = Field(..., description="Base URL for FEL certifier API")
+    username: str = Field(..., description="Username for authentication")
+    password: str = Field(..., description="Password for authentication")
+    nit_empresa: str = Field(..., description="NIT of the company")
+    environment: str = Field(default="test", description="Environment: test or production")
+    
+
+class InvoiceCreateWithoutFEL(InvoiceBase):
+    """Create invoice that won't be processed through FEL (for receipts)"""
+    requires_fel: bool = Field(default=False, description="This invoice won't require FEL processing")
