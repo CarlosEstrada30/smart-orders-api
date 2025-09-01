@@ -23,14 +23,51 @@ def get_tenant_service() -> TenantService:
     return TenantService()
 
 
-def get_current_user(
+def get_tenant_db(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service)
+) -> Session:
+    """
+    Extrae el tenant_schema del JWT y retorna la sesión de BD correspondiente.
+    
+    Funciona tanto para esquema 'public' como para tenants específicos.
+    Esta es la función central para multi-tenancy.
+    """
+    try:
+        # Verificar y decodificar el JWT
+        token_data = auth_service.verify_token(credentials.credentials)
+        if not token_data:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Extraer el schema del tenant (puede ser "public" o schema específico)
+        tenant_schema = token_data.tenant_schema
+        if not tenant_schema:
+            # Fallback a public si no hay tenant_schema en el JWT
+            tenant_schema = "public"
+        
+        # Retornar sesión para el schema correspondiente
+        return get_session_for_schema(tenant_schema)
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+def get_current_user(
+    tenant_db: Session = Depends(get_tenant_db),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     auth_service: AuthService = Depends(get_auth_service)
 ) -> User:
-    """Get current authenticated user from JWT token"""
+    """Get current authenticated user from JWT token using tenant-specific database"""
     token = credentials.credentials
-    user = auth_service.get_current_user(db, token)
+    user = auth_service.get_current_user(tenant_db, token)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

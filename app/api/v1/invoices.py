@@ -14,7 +14,7 @@ from ...schemas.invoice import (
 from ...services.invoice_service import InvoiceService
 from ...models.invoice import InvoiceStatus
 from ..dependencies import get_invoice_service
-from .auth import get_current_active_user
+from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
@@ -24,7 +24,7 @@ router = APIRouter(prefix="/invoices", tags=["invoices"])
 def create_invoice(
     order_id: int,
     invoice: InvoiceCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -43,7 +43,7 @@ def get_invoices(
     client_id: Optional[int] = Query(None, description="Filter by client ID"),
     overdue_only: bool = Query(False, description="Show only overdue invoices"),
     pending_only: bool = Query(False, description="Show only pending invoices"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -68,7 +68,7 @@ def get_invoices(
 def get_invoice_summary(
     start_date: Optional[datetime] = Query(None, description="Start date for summary"),
     end_date: Optional[datetime] = Query(None, description="End date for summary"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -79,7 +79,7 @@ def get_invoice_summary(
 @router.get("/{invoice_id}", response_model=InvoiceResponse)
 def get_invoice(
     invoice_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -93,7 +93,7 @@ def get_invoice(
 @router.get("/number/{invoice_number}", response_model=InvoiceResponse)
 def get_invoice_by_number(
     invoice_number: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -107,7 +107,7 @@ def get_invoice_by_number(
 @router.get("/order/{order_id}", response_model=InvoiceResponse)
 def get_invoice_by_order(
     order_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -122,7 +122,7 @@ def get_invoice_by_order(
 def update_invoice(
     invoice_id: int,
     invoice_update: InvoiceUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -140,7 +140,7 @@ def update_invoice(
 def update_invoice_status(
     invoice_id: int,
     new_status: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -158,7 +158,7 @@ def update_invoice_status(
 @router.post("/{invoice_id}/cancel", response_model=InvoiceResponse)
 def cancel_invoice(
     invoice_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -175,7 +175,7 @@ def cancel_invoice(
 @router.post("/payments", response_model=InvoiceResponse)
 def record_payment(
     payment: PaymentCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -190,7 +190,7 @@ def record_payment(
 def download_invoice_pdf(
     invoice_id: int,
     regenerate: bool = Query(False, description="Force regenerate PDF"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -223,7 +223,7 @@ def download_invoice_pdf(
 def generate_invoice_pdf(
     invoice_id: int,
     regenerate: bool = Query(False, description="Force regenerate PDF"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -244,7 +244,7 @@ def generate_invoice_pdf(
 @router.post("/orders/{order_id}/auto-invoice", response_model=InvoiceResponse)
 def auto_create_invoice(
     order_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -263,7 +263,7 @@ def auto_create_invoice(
 
 @router.post("/maintenance/mark-overdue")
 def mark_overdue_invoices(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -279,7 +279,7 @@ def mark_overdue_invoices(
 @router.get("/{invoice_id}/pdf/preview", response_class=StreamingResponse)
 def preview_invoice_pdf(
     invoice_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -310,7 +310,7 @@ def preview_invoice_pdf(
 def process_invoice_fel(
     invoice_id: int,
     certifier: str = Query(default="digifact", description="FEL certifier to use (digifact, facturasgt)"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -328,7 +328,7 @@ def process_invoice_fel(
 def auto_create_invoice_with_fel(
     order_id: int,
     certifier: str = Query(default="digifact", description="FEL certifier to use"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -348,7 +348,7 @@ def auto_create_invoice_with_fel(
 @router.post("/orders/{order_id}/receipt-only")
 def create_receipt_only(
     order_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -373,7 +373,7 @@ def create_receipt_only(
 @router.post("/fel/retry-failed")
 def retry_failed_fel_processing(
     certifier: str = Query(default="digifact", description="FEL certifier to use"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -387,7 +387,7 @@ def retry_failed_fel_processing(
 
 @router.get("/fel/status-summary")
 def get_fel_status_summary(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -403,7 +403,7 @@ def get_fel_status_summary(
 def get_fiscal_revenue(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     invoice_service: InvoiceService = Depends(get_invoice_service),
     current_user: User = Depends(get_current_active_user)
 ):

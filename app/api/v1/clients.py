@@ -5,7 +5,7 @@ from ...database import get_db
 from ...schemas.client import ClientCreate, ClientUpdate, ClientResponse
 from ...services.client_service import ClientService
 from ..dependencies import get_client_service
-from .auth import get_current_active_user
+from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
 
 router = APIRouter(prefix="/clients", tags=["clients"])
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/clients", tags=["clients"])
 @router.post("/", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)
 def create_client(
     client: ClientCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     client_service: ClientService = Depends(get_client_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -30,7 +30,7 @@ def get_clients(
     skip: int = 0,
     limit: int = 100,
     active_only: bool = False,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     client_service: ClientService = Depends(get_client_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -43,7 +43,7 @@ def get_clients(
 @router.get("/search", response_model=List[ClientResponse])
 def search_clients(
     name: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     client_service: ClientService = Depends(get_client_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -54,7 +54,7 @@ def search_clients(
 @router.get("/{client_id}", response_model=ClientResponse)
 def get_client(
     client_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     client_service: ClientService = Depends(get_client_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -69,7 +69,7 @@ def get_client(
 def update_client(
     client_id: int,
     client_update: ClientUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     client_service: ClientService = Depends(get_client_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -86,7 +86,7 @@ def update_client(
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_client(
     client_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     client_service: ClientService = Depends(get_client_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -100,7 +100,7 @@ def delete_client(
 @router.post("/{client_id}/reactivate", response_model=ClientResponse)
 def reactivate_client(
     client_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     client_service: ClientService = Depends(get_client_service),
     current_user: User = Depends(get_current_active_user)
 ):

@@ -12,7 +12,7 @@ from ...schemas.inventory_entry import (
 from ...services.inventory_entry_service import InventoryEntryService
 from ...models.inventory_entry import EntryType, EntryStatus
 from ..dependencies import get_inventory_entry_service
-from .auth import get_current_active_user
+from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
 from ...utils.permissions import can_approve_inventory, can_complete_inventory
 
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/inventory", tags=["inventory"])
 @router.post("/entries", response_model=InventoryEntryResponse, status_code=status.HTTP_201_CREATED)
 def create_inventory_entry(
     entry: InventoryEntryCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -44,7 +44,7 @@ def get_inventory_entries(
     pending_only: bool = Query(False, description="Show only pending entries"),
     start_date: Optional[datetime] = Query(None, description="Start date filter"),
     end_date: Optional[datetime] = Query(None, description="End date filter"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -74,7 +74,7 @@ def get_inventory_entries(
 def get_inventory_summary(
     start_date: Optional[datetime] = Query(None, description="Start date for summary"),
     end_date: Optional[datetime] = Query(None, description="End date for summary"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -85,7 +85,7 @@ def get_inventory_summary(
 @router.get("/entries/{entry_id}", response_model=InventoryEntryResponse)
 def get_inventory_entry(
     entry_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -99,7 +99,7 @@ def get_inventory_entry(
 @router.get("/entries/number/{entry_number}", response_model=InventoryEntryResponse)
 def get_inventory_entry_by_number(
     entry_number: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -114,7 +114,7 @@ def get_inventory_entry_by_number(
 def update_inventory_entry(
     entry_id: int,
     entry_update: InventoryEntryUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -131,7 +131,7 @@ def update_inventory_entry(
 @router.post("/entries/{entry_id}/approve", response_model=InventoryEntryResponse)
 def approve_inventory_entry(
     entry_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -155,7 +155,7 @@ def approve_inventory_entry(
 @router.post("/entries/{entry_id}/complete", response_model=InventoryEntryResponse)
 def complete_inventory_entry(
     entry_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -179,7 +179,7 @@ def complete_inventory_entry(
 @router.post("/entries/{entry_id}/cancel", response_model=InventoryEntryResponse)
 def cancel_inventory_entry(
     entry_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -196,7 +196,7 @@ def cancel_inventory_entry(
 @router.post("/entries/batch-update")
 def batch_update_entries(
     batch_request: BatchUpdateRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -211,7 +211,7 @@ def batch_update_entries(
 def validate_inventory_entry(
     entry_id: int,
     validation_options: EntryValidationRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -228,7 +228,7 @@ def validate_inventory_entry(
 @router.post("/stock/adjust", response_model=InventoryEntryResponse)
 def create_stock_adjustment(
     adjustment: StockAdjustmentRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -244,7 +244,7 @@ def create_stock_adjustment(
 @router.get("/reports/movements", response_model=List[InventoryReport])
 def get_inventory_movement_report(
     product_id: Optional[int] = Query(None, description="Filter by specific product"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -258,7 +258,7 @@ def get_inventory_movement_report(
 def create_production_entry(
     entry: InventoryEntryCreate,
     auto_complete: bool = Query(False, description="Auto-complete entry after creation"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -286,7 +286,7 @@ def create_production_entry(
 def create_purchase_entry(
     entry: InventoryEntryCreate,
     auto_approve: bool = Query(False, description="Auto-approve entry after creation"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     inventory_service: InventoryEntryService = Depends(get_inventory_entry_service),
     current_user: User = Depends(get_current_active_user)
 ):

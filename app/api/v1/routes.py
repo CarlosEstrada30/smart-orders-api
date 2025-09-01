@@ -5,7 +5,7 @@ from ...database import get_db
 from ...schemas.route import RouteCreate, RouteUpdate, RouteResponse
 from ...services.route_service import RouteService
 from ..dependencies import get_route_service
-from .auth import get_current_active_user
+from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
 
 router = APIRouter(prefix="/routes", tags=["routes"])
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/routes", tags=["routes"])
 @router.post("/", response_model=RouteResponse, status_code=status.HTTP_201_CREATED)
 def create_route(
     route: RouteCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     route_service: RouteService = Depends(get_route_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -31,7 +31,7 @@ def get_routes(
     limit: int = 100,
     active_only: bool = Query(False, description="Filter only active routes"),
     search: str = Query(None, description="Search routes by name"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     route_service: RouteService = Depends(get_route_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -48,7 +48,7 @@ def get_routes(
 @router.get("/{route_id}", response_model=RouteResponse)
 def get_route(
     route_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     route_service: RouteService = Depends(get_route_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -63,7 +63,7 @@ def get_route(
 def update_route(
     route_id: int,
     route_update: RouteUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     route_service: RouteService = Depends(get_route_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -80,7 +80,7 @@ def update_route(
 @router.delete("/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_route(
     route_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     route_service: RouteService = Depends(get_route_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -94,7 +94,7 @@ def delete_route(
 @router.post("/{route_id}/reactivate", response_model=RouteResponse)
 def reactivate_route(
     route_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     route_service: RouteService = Depends(get_route_service),
     current_user: User = Depends(get_current_active_user)
 ):

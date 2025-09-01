@@ -5,7 +5,7 @@ from ...database import get_db
 from ...schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from ...services.product_service import ProductService
 from ..dependencies import get_product_service
-from .auth import get_current_active_user
+from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/products", tags=["products"])
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 def create_product(
     product: ProductCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     product_service: ProductService = Depends(get_product_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -30,7 +30,7 @@ def get_products(
     skip: int = 0,
     limit: int = 100,
     active_only: bool = False,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     product_service: ProductService = Depends(get_product_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -43,7 +43,7 @@ def get_products(
 @router.get("/search", response_model=List[ProductResponse])
 def search_products(
     name: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     product_service: ProductService = Depends(get_product_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -54,7 +54,7 @@ def search_products(
 @router.get("/low-stock", response_model=List[ProductResponse])
 def get_low_stock_products(
     threshold: int = 10,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     product_service: ProductService = Depends(get_product_service)
 ):
     """Get products with low stock"""
@@ -64,7 +64,7 @@ def get_low_stock_products(
 @router.get("/{product_id}", response_model=ProductResponse)
 def get_product(
     product_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     product_service: ProductService = Depends(get_product_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -78,7 +78,7 @@ def get_product(
 @router.get("/sku/{sku}", response_model=ProductResponse)
 def get_product_by_sku(
     sku: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     product_service: ProductService = Depends(get_product_service)
 ):
     """Get a specific product by SKU"""
@@ -92,7 +92,7 @@ def get_product_by_sku(
 def update_product(
     product_id: int,
     product_update: ProductUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     product_service: ProductService = Depends(get_product_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -109,7 +109,7 @@ def update_product(
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_product(
     product_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     product_service: ProductService = Depends(get_product_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -123,7 +123,7 @@ def delete_product(
 @router.post("/{product_id}/reactivate", response_model=ProductResponse)
 def reactivate_product(
     product_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     product_service: ProductService = Depends(get_product_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -138,7 +138,7 @@ def reactivate_product(
 def update_stock(
     product_id: int,
     stock_change: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     product_service: ProductService = Depends(get_product_service),
     current_user: User = Depends(get_current_active_user)
 ):

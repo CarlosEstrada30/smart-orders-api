@@ -10,7 +10,7 @@ from ...services.order_service import OrderService
 from ...services.receipt_generator import ReceiptGenerator
 from ...models.order import OrderStatus
 from ..dependencies import get_order_service
-from .auth import get_current_active_user
+from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
 from ...utils.permissions import can_create_orders, can_view_orders, can_update_delivery_status
 
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 def create_order(
     order: OrderCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -43,7 +43,7 @@ def get_orders(
     skip: int = 0,
     limit: int = 100,
     status_filter: str = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -67,7 +67,7 @@ def get_orders(
 @router.get("/{order_id}", response_model=OrderResponse)
 def get_order(
     order_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -82,7 +82,7 @@ def get_order(
 def update_order(
     order_id: int,
     order_update: OrderUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -103,7 +103,7 @@ def update_order(
 @router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_order(
     order_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -118,7 +118,7 @@ def delete_order(
 def add_order_item(
     order_id: int,
     item: OrderItemCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -134,7 +134,7 @@ def add_order_item(
 def remove_order_item(
     order_id: int,
     item_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -150,7 +150,7 @@ def remove_order_item(
 def update_order_status(
     order_id: int,
     new_status: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -186,7 +186,7 @@ def get_orders_by_client(
     client_id: int,
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -200,7 +200,7 @@ def get_orders_by_client(
 @router.get("/{order_id}/receipt", response_class=StreamingResponse)
 def download_order_receipt(
     order_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -252,7 +252,7 @@ def download_order_receipt(
 @router.get("/{order_id}/receipt/preview", response_class=StreamingResponse)
 def preview_order_receipt(
     order_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -301,7 +301,7 @@ def preview_order_receipt(
 @router.post("/{order_id}/receipt/generate")
 def generate_order_receipt_file(
     order_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
