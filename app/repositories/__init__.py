@@ -4,6 +4,7 @@ from .client_repository import ClientRepository
 from .product_repository import ProductRepository
 from .order_repository import OrderRepository
 from .route_repository import RouteRepository
+from .tenant_repository import TenantRepository
 
 __all__ = [
     "BaseRepository",
@@ -11,5 +12,6 @@ __all__ = [
     "ClientRepository",
     "ProductRepository",
     "OrderRepository",
-    "RouteRepository"
+    "RouteRepository",
+    "TenantRepository"
 ] 

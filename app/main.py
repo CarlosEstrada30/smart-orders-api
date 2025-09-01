@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine
 from .models import Base
-from .api.v1 import users, clients, products, orders, routes, auth, invoices, inventory
+from .api.v1 import users, clients, products, orders, routes, auth, invoices, inventory, tenants
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -34,6 +34,7 @@ app.include_router(routes.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(invoices.router, prefix="/api/v1")
 app.include_router(inventory.router, prefix="/api/v1")
+app.include_router(tenants.router, prefix="/api/v1")
 
 
 @app.get("/")
