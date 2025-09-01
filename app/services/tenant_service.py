@@ -4,8 +4,11 @@ from sqlalchemy.exc import SQLAlchemyError
 import logging
 from ..repositories.tenant_repository import TenantRepository
 from ..schemas.tenant import TenantCreate, TenantUpdate, TenantResponse
+from ..schemas.user import UserCreate
 from ..models.tenant import Tenant
-from ..utils.tenant_db import create_schema_if_not_exists, run_migrations_for_schema, drop_schema_if_exists
+from ..models.user import UserRole
+from ..services.user_service import UserService
+from ..utils.tenant_db import create_schema_if_not_exists, run_migrations_for_schema, drop_schema_if_exists, get_session_for_schema
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +16,7 @@ logger = logging.getLogger(__name__)
 class TenantService:
     def __init__(self):
         self.repository = TenantRepository()
+        self.user_service = UserService()
 
     def get_tenant(self, db: Session, tenant_id: int) -> Optional[Tenant]:
         return self.repository.get(db, tenant_id)
@@ -70,6 +74,9 @@ class TenantService:
             # Ejecutar migraciones en el nuevo schema
             if not run_migrations_for_schema(db_tenant.schema_name):
                 raise ValueError(f"No se pudieron ejecutar las migraciones en el schema '{db_tenant.schema_name}'")
+            
+            # Crear superusuario por defecto para el tenant
+            self._create_default_superuser(db_tenant.schema_name, db_tenant.subdominio)
             
             logger.info(f"Tenant creado exitosamente: {db_tenant.id}, Schema: {db_tenant.schema_name}")
             return db_tenant
@@ -129,3 +136,47 @@ class TenantService:
             bool: True si se eliminó exitosamente, False en caso contrario
         """
         return drop_schema_if_exists(schema_name)
+    
+    def _create_default_superuser(self, schema_name: str, subdominio: str) -> None:
+        """
+        Crea un superusuario por defecto en el schema del tenant
+        
+        Args:
+            schema_name: Nombre del schema del tenant
+            subdominio: Subdominio del tenant para generar credenciales
+        """
+        try:
+            # Crear sesión específica para el schema del tenant
+            tenant_db = get_session_for_schema(schema_name)
+            
+            # Generar credenciales basadas en el subdominio
+            admin_email = f"admin@{subdominio}.com"
+            admin_password = f"admin{subdominio}123"
+            admin_username = f"admin_{subdominio}"
+            admin_full_name = f"Administrador {subdominio.title()}"
+            
+            # Crear datos del usuario administrador
+            admin_user_data = UserCreate(
+                email=admin_email,
+                username=admin_username,
+                full_name=admin_full_name,
+                password=admin_password,
+                is_superuser=True,
+                role=UserRole.ADMIN
+            )
+            
+            try:
+                # Crear el usuario administrador en el schema del tenant
+                self.user_service.create_user(tenant_db, admin_user_data)
+                logger.info(f"Superusuario creado exitosamente para tenant: {admin_email}")
+                
+            except ValueError as e:
+                logger.warning(f"No se pudo crear superusuario para tenant {subdominio}: {str(e)}")
+                # No lanzar excepción aquí para no fallar la creación del tenant
+                
+            finally:
+                tenant_db.close()
+                
+        except Exception as e:
+            logger.error(f"Error creando superusuario para tenant {subdominio}: {str(e)}")
+            # No lanzar excepción aquí para no fallar la creación del tenant

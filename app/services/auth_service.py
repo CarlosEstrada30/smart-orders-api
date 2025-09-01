@@ -33,7 +33,17 @@ class AuthService:
             email: str = payload.get("sub")
             if email is None:
                 return None
-            token_data = TokenData(email=email)
+            
+            # Extraer información del tenant del token (estructura anidada)
+            tenant_info = payload.get("tenant", {})
+            tenant_id = tenant_info.get("tenant_id")
+            tenant_schema = tenant_info.get("tenant_schema")
+            
+            token_data = TokenData(
+                email=email, 
+                tenant_id=tenant_id, 
+                tenant_schema=tenant_schema
+            )
             return token_data
         except JWTError:
             return None

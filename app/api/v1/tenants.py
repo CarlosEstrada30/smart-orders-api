@@ -26,6 +26,7 @@ def create_tenant(
     1. Crea el registro del tenant en el schema public
     2. Crea un nuevo schema de base de datos con el nombre generado
     3. Ejecuta las migraciones en el nuevo schema
+    4. Crea un superusuario por defecto: admin@{subdominio}.com con password admin{subdominio}123
     
     Requiere permisos de administrador.
     """

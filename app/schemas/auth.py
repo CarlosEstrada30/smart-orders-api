@@ -9,8 +9,11 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+    tenant_id: Optional[int] = None
+    tenant_schema: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
     email: str
-    password: str 
+    password: str
+    subdominio: Optional[str] = None 
