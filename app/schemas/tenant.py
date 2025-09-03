@@ -9,19 +9,23 @@ class TenantBase(BaseModel):
 
 
 class TenantCreate(TenantBase):
-    pass  # Solo necesita nombre y subdominio, el token se autogenera
+    is_trial: Optional[bool] = False  # Por defecto no es de prueba
 
 
 class TenantUpdate(BaseModel):
     nombre: Optional[str] = None
     subdominio: Optional[str] = None
+    is_trial: Optional[bool] = None
     # token no es actualizable, se autogenera como UUID
+    # active se maneja internamente para soft delete
 
 
 class TenantResponse(TenantBase):
     id: int
     token: str
     schema_name: str
+    active: bool
+    is_trial: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
 
