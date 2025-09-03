@@ -9,6 +9,7 @@ from ..services.auth_service import AuthService
 from ..services.invoice_service import InvoiceService
 from ..services.inventory_entry_service import InventoryEntryService
 from ..services.tenant_service import TenantService
+from ..services.settings_service import SettingsService
 
 
 def get_user_service() -> UserService:
@@ -44,4 +45,8 @@ def get_inventory_entry_service() -> InventoryEntryService:
 
 
 def get_tenant_service() -> TenantService:
-    return TenantService() 
+    return TenantService()
+
+
+def get_settings_service() -> SettingsService:
+    return SettingsService() 

@@ -4,6 +4,7 @@ from .product_service import ProductService
 from .order_service import OrderService
 from .route_service import RouteService
 from .tenant_service import TenantService
+from .settings_service import SettingsService
 
 __all__ = [
     "UserService",
@@ -11,5 +12,6 @@ __all__ = [
     "ProductService",
     "OrderService",
     "RouteService",
-    "TenantService"
+    "TenantService",
+    "SettingsService"
 ] 
