@@ -8,8 +8,10 @@ from ...schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemC
 from ...schemas.invoice import CompanyInfo
 from ...services.order_service import OrderService
 from ...services.receipt_generator import ReceiptGenerator
+from ...services.compact_receipt_generator import CompactReceiptGenerator
+from ...services.settings_service import SettingsService
 from ...models.order import OrderStatus
-from ..dependencies import get_order_service
+from ..dependencies import get_order_service, get_settings_service
 from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
 from ...utils.permissions import can_create_orders, can_view_orders, can_update_delivery_status
@@ -202,6 +204,7 @@ def download_order_receipt(
     order_id: int,
     db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
+    settings_service: SettingsService = Depends(get_settings_service),
     current_user: User = Depends(get_current_active_user)
 ):
     """Download order receipt/voucher PDF (requires authentication)"""
@@ -211,17 +214,16 @@ def download_order_receipt(
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         
-        # Create receipt generator
-        receipt_generator = ReceiptGenerator()
+        # Get company settings
+        settings = settings_service.get_company_settings(db)
+        if not settings:
+            raise HTTPException(
+                status_code=404, 
+                detail="Company settings not found. Please configure company information first."
+            )
         
-        # Company info (should be configurable)
-        company_info = CompanyInfo(
-            name="Smart Orders Guatemala",
-            address="Zona 10, Ciudad de Guatemala, Guatemala",
-            phone="+502 2222-3333",
-            email="comprobantes@smartorders.gt",
-            nit="12345678-9"
-        )
+        # Create professional receipt generator
+        receipt_generator = CompactReceiptGenerator()
         
         # Get order object for PDF generation
         from ...repositories.order_repository import OrderRepository
@@ -231,8 +233,8 @@ def download_order_receipt(
         if not order_obj:
             raise HTTPException(status_code=404, detail="Order not found")
         
-        # Generate PDF buffer
-        pdf_buffer = receipt_generator.generate_receipt_buffer(order_obj, company_info)
+        # Generate PDF buffer with company settings
+        pdf_buffer = receipt_generator.generate_receipt_buffer(order_obj, settings)
         
         # Set filename
         filename = f"comprobante_pedido_{order_obj.order_number}.pdf"
@@ -254,6 +256,7 @@ def preview_order_receipt(
     order_id: int,
     db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
+    settings_service: SettingsService = Depends(get_settings_service),
     current_user: User = Depends(get_current_active_user)
 ):
     """Preview order receipt PDF in browser (requires authentication)"""
@@ -263,17 +266,16 @@ def preview_order_receipt(
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         
-        # Create receipt generator
-        receipt_generator = ReceiptGenerator()
+        # Get company settings
+        settings = settings_service.get_company_settings(db)
+        if not settings:
+            raise HTTPException(
+                status_code=404, 
+                detail="Company settings not found. Please configure company information first."
+            )
         
-        # Company info
-        company_info = CompanyInfo(
-            name="Smart Orders Guatemala",
-            address="Zona 10, Ciudad de Guatemala, Guatemala", 
-            phone="+502 2222-3333",
-            email="comprobantes@smartorders.gt",
-            nit="12345678-9"
-        )
+        # Create professional receipt generator
+        receipt_generator = CompactReceiptGenerator()
         
         # Get order object for PDF generation
         from ...repositories.order_repository import OrderRepository
@@ -283,8 +285,8 @@ def preview_order_receipt(
         if not order_obj:
             raise HTTPException(status_code=404, detail="Order not found")
         
-        # Generate PDF buffer
-        pdf_buffer = receipt_generator.generate_receipt_buffer(order_obj, company_info)
+        # Generate PDF buffer with company settings
+        pdf_buffer = receipt_generator.generate_receipt_buffer(order_obj, settings)
         
         # Return as inline PDF (for preview in browser)
         return StreamingResponse(
@@ -303,6 +305,7 @@ def generate_order_receipt_file(
     order_id: int,
     db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
+    settings_service: SettingsService = Depends(get_settings_service),
     current_user: User = Depends(get_current_active_user)
 ):
     """Generate and save order receipt PDF file (requires authentication)"""
@@ -312,17 +315,16 @@ def generate_order_receipt_file(
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         
-        # Create receipt generator
-        receipt_generator = ReceiptGenerator()
+        # Get company settings
+        settings = settings_service.get_company_settings(db)
+        if not settings:
+            raise HTTPException(
+                status_code=404, 
+                detail="Company settings not found. Please configure company information first."
+            )
         
-        # Company info
-        company_info = CompanyInfo(
-            name="Smart Orders Guatemala",
-            address="Zona 10, Ciudad de Guatemala, Guatemala",
-            phone="+502 2222-3333", 
-            email="comprobantes@smartorders.gt",
-            nit="12345678-9"
-        )
+        # Create professional receipt generator
+        receipt_generator = CompactReceiptGenerator()
         
         # Get order object for PDF generation
         from ...repositories.order_repository import OrderRepository
@@ -341,8 +343,8 @@ def generate_order_receipt_file(
         filename = f"comprobante_{order_obj.order_number}_{order_obj.created_at.strftime('%Y%m%d_%H%M%S')}.pdf"
         file_path = os.path.join(receipts_dir, filename)
         
-        # Generate PDF file
-        receipt_generator.generate_order_receipt(order_obj, company_info, file_path)
+        # Generate PDF file with company settings
+        receipt_generator.generate_order_receipt(order_obj, settings, file_path)
         
         return {
             "message": "Receipt generated successfully",
