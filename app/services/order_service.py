@@ -1,10 +1,12 @@
 from typing import Optional, List
+from datetime import date
 from sqlalchemy.orm import Session
 from ..repositories.order_repository import OrderRepository
 from ..repositories.client_repository import ClientRepository
 from ..repositories.product_repository import ProductRepository
 from ..repositories.route_repository import RouteRepository
 from ..schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate, OrderItemResponse
+from ..schemas.pagination import PaginatedResponse
 from ..models.order import Order, OrderStatus
 from .product_service import ProductService
 
@@ -80,6 +82,84 @@ class OrderService:
     def get_orders_by_status(self, db: Session, status: OrderStatus, skip: int = 0, limit: int = 100) -> List[OrderResponse]:
         orders = self.order_repository.get_orders_by_status(db, status=status, skip=skip, limit=limit)
         return [self._process_order_response(order) for order in orders]
+
+    def get_orders_with_filters(
+        self,
+        db: Session,
+        skip: int = 0,
+        limit: int = 100,
+        status: Optional[OrderStatus] = None,
+        route_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        search: Optional[str] = None
+    ) -> List[OrderResponse]:
+        """Get orders with optional filters for status, route, date range, and search"""
+        orders = self.order_repository.get_orders_with_filters(
+            db, 
+            skip=skip, 
+            limit=limit, 
+            status=status, 
+            route_id=route_id, 
+            date_from=date_from, 
+            date_to=date_to,
+            search=search
+        )
+        return [self._process_order_response(order) for order in orders]
+
+    def get_orders_paginated(
+        self,
+        db: Session,
+        skip: int = 0,
+        limit: int = 100,
+        status: Optional[OrderStatus] = None,
+        route_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        search: Optional[str] = None
+    ) -> PaginatedResponse[OrderResponse]:
+        """Get orders with pagination metadata"""
+        # Check if any filters are applied
+        has_filters = any([status, route_id, date_from, date_to, search])
+        
+        if has_filters:
+            # Use filtered method
+            orders = self.order_repository.get_orders_with_filters(
+                db, 
+                skip=skip, 
+                limit=limit, 
+                status=status, 
+                route_id=route_id, 
+                date_from=date_from, 
+                date_to=date_to,
+                search=search
+            )
+            
+            # Get total count with same filters
+            total = self.order_repository.count_orders_with_filters(
+                db, 
+                status=status, 
+                route_id=route_id, 
+                date_from=date_from, 
+                date_to=date_to,
+                search=search
+            )
+        else:
+            # Use unfiltered method
+            orders = self.order_repository.get_multi(db, skip=skip, limit=limit)
+            # For total count without filters, we need a simple count
+            total = db.query(self.order_repository.model).count()
+        
+        # Process orders
+        processed_orders = [self._process_order_response(order) for order in orders]
+        
+        # Create paginated response
+        return PaginatedResponse.create(
+            items=processed_orders,
+            total=total,
+            skip=skip,
+            limit=limit
+        )
 
     def create_order(self, db: Session, order_data: OrderCreate) -> OrderResponse:
         # Validate client exists and is active

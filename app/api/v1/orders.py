@@ -1,10 +1,12 @@
-from typing import List
+from typing import List, Optional, Union
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from io import BytesIO
 from ...database import get_db
 from ...schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate
+from ...schemas.pagination import PaginatedResponse
 from ...schemas.invoice import CompanyInfo
 from ...services.order_service import OrderService
 from ...services.receipt_generator import ReceiptGenerator
@@ -40,16 +42,34 @@ def create_order(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/", response_model=List[OrderResponse])
+@router.get("/", response_model=Union[List[OrderResponse], PaginatedResponse[OrderResponse]])
 def get_orders(
     skip: int = 0,
     limit: int = 100,
-    status_filter: str = None,
+    status_filter: Optional[str] = Query(None, description="Filter by order status"),
+    route_id: Optional[int] = Query(None, description="Filter by route ID"),
+    date_from: Optional[date] = Query(None, description="Filter orders from this date (YYYY-MM-DD)"),
+    date_to: Optional[date] = Query(None, description="Filter orders to this date (YYYY-MM-DD)"),
+    search: Optional[str] = Query(None, description="Search by order number or client name"),
+    paginated: bool = Query(True, description="Return paginated response with metadata"),
     db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Get all orders (requires view orders permission)"""
+    """Get all orders with optional filters (requires view orders permission)
+    
+    Filters:
+    - status_filter: Filter by order status (pending, confirmed, in_progress, shipped, delivered, cancelled)
+    - route_id: Filter by specific route ID
+    - date_from: Show orders from this date onwards (inclusive)
+    - date_to: Show orders up to this date (inclusive)
+    - search: Search by order number or client name (case-insensitive partial matching)
+    - paginated: Return paginated response with metadata (default: True)
+    
+    Response:
+    - If paginated=True: Returns PaginatedResponse with items and pagination metadata
+    - If paginated=False: Returns List[OrderResponse] for backward compatibility
+    """
     # Verificar permisos
     if not can_view_orders(current_user):
         raise HTTPException(
@@ -57,13 +77,56 @@ def get_orders(
             detail="No tienes permisos para ver pedidos."
         )
     
+    # Validate date range
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(
+            status_code=400, 
+            detail="date_from cannot be later than date_to"
+        )
+    
+    # Convert status filter to enum if provided
+    status_enum = None
     if status_filter:
         try:
             status_enum = OrderStatus(status_filter)
-            return order_service.get_orders_by_status(db, status_enum, skip=skip, limit=limit)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid status: {status_filter}")
-    return order_service.get_orders(db, skip=skip, limit=limit)
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid status: {status_filter}. Valid values are: {', '.join([s.value for s in OrderStatus])}"
+            )
+    
+    # Choose response format based on paginated parameter
+    if paginated:
+        # Use paginated response with full metadata
+        if any([status_enum, route_id, date_from, date_to, search]):
+            return order_service.get_orders_paginated(
+                db, 
+                skip=skip, 
+                limit=limit,
+                status=status_enum,
+                route_id=route_id,
+                date_from=date_from,
+                date_to=date_to,
+                search=search
+            )
+        else:
+            # No filters but paginated response
+            return order_service.get_orders_paginated(db, skip=skip, limit=limit)
+    else:
+        # Backward compatibility: return simple list
+        if any([status_enum, route_id, date_from, date_to, search]):
+            return order_service.get_orders_with_filters(
+                db, 
+                skip=skip, 
+                limit=limit,
+                status=status_enum,
+                route_id=route_id,
+                date_from=date_from,
+                date_to=date_to,
+                search=search
+            )
+        else:
+            return order_service.get_orders(db, skip=skip, limit=limit)
 
 
 @router.get("/{order_id}", response_model=OrderResponse)

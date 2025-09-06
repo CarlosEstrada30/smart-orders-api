@@ -1,5 +1,7 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import and_, or_
+from datetime import datetime, date
 from .base import BaseRepository
 from ..models.order import Order, OrderItem, OrderStatus
 from ..schemas.order import OrderCreate, OrderUpdate, OrderItemCreate
@@ -95,4 +97,116 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             order.status = status
             db.commit()
             db.refresh(order)
-        return order 
+        return order
+
+    def get_orders_with_filters(
+        self, 
+        db: Session, 
+        *, 
+        skip: int = 0, 
+        limit: int = 100,
+        status: Optional[OrderStatus] = None,
+        route_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        search: Optional[str] = None
+    ) -> List[Order]:
+        """Get orders with optional filters for status, route, date range, and search"""
+        from ..models.client import Client
+        
+        query = db.query(Order).options(
+            joinedload(Order.client),
+            joinedload(Order.route),
+            joinedload(Order.items).joinedload(OrderItem.product)
+        )
+        
+        # Build filters dynamically
+        filters = []
+        
+        if status is not None:
+            from sqlalchemy import text
+            # Convert to uppercase to match database values
+            status_value = status.value if hasattr(status, 'value') else str(status)
+            status_value_upper = status_value.upper()
+            filters.append(text("orders.status = :status").params(status=status_value_upper))
+        
+        if route_id is not None:
+            filters.append(Order.route_id == route_id)
+        
+        if date_from is not None:
+            # Include orders from the beginning of date_from
+            filters.append(Order.created_at >= datetime.combine(date_from, datetime.min.time()))
+        
+        if date_to is not None:
+            # Include orders until the end of date_to
+            filters.append(Order.created_at <= datetime.combine(date_to, datetime.max.time()))
+        
+        if search is not None and search.strip():
+            # Search in order number or client name (case-insensitive)
+            search_term = f"%{search.strip()}%"
+            search_filters = or_(
+                Order.order_number.ilike(search_term),
+                Client.name.ilike(search_term)
+            )
+            filters.append(search_filters)
+            # Join with Client table for name search
+            query = query.join(Client, Order.client_id == Client.id)
+        
+        # Apply filters if any
+        if filters:
+            query = query.filter(and_(*filters))
+        
+        return query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
+
+    def count_orders_with_filters(
+        self, 
+        db: Session, 
+        *, 
+        status: Optional[OrderStatus] = None,
+        route_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        search: Optional[str] = None
+    ) -> int:
+        """Count orders with optional filters for status, route, date range, and search"""
+        from ..models.client import Client
+        
+        query = db.query(Order)
+        
+        # Build filters dynamically (same logic as get_orders_with_filters)
+        filters = []
+        
+        if status is not None:
+            from sqlalchemy import text
+            # Convert to uppercase to match database values
+            status_value = status.value if hasattr(status, 'value') else str(status)
+            status_value_upper = status_value.upper()
+            filters.append(text("orders.status = :status").params(status=status_value_upper))
+        
+        if route_id is not None:
+            filters.append(Order.route_id == route_id)
+        
+        if date_from is not None:
+            # Include orders from the beginning of date_from
+            filters.append(Order.created_at >= datetime.combine(date_from, datetime.min.time()))
+        
+        if date_to is not None:
+            # Include orders until the end of date_to
+            filters.append(Order.created_at <= datetime.combine(date_to, datetime.max.time()))
+        
+        if search is not None and search.strip():
+            # Search in order number or client name (case-insensitive)
+            search_term = f"%{search.strip()}%"
+            search_filters = or_(
+                Order.order_number.ilike(search_term),
+                Client.name.ilike(search_term)
+            )
+            filters.append(search_filters)
+            # Join with Client table for name search
+            query = query.join(Client, Order.client_id == Client.id)
+        
+        # Apply filters if any
+        if filters:
+            query = query.filter(and_(*filters))
+        
+        return query.count() 
