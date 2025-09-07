@@ -342,7 +342,7 @@ class CompactReceiptGenerator:
         ]
         
         # Ajustar anchos para que el texto "TOTAL A PAGAR" no se desborde
-        total_table = Table(total_data, colWidths=[3.5*cm, 2.5*cm, 4*cm, 6*cm])
+        total_table = Table(total_data, colWidths=[3*cm, 2*cm, 5*cm, 6*cm])
         total_table.setStyle(TableStyle([
             # Fila de información
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),

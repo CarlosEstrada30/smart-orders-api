@@ -1,5 +1,5 @@
 from typing import List, Optional, Union
-from datetime import date
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from ...schemas.invoice import CompanyInfo
 from ...services.order_service import OrderService
 from ...services.receipt_generator import ReceiptGenerator
 from ...services.compact_receipt_generator import CompactReceiptGenerator
+from ...services.orders_report_generator import OrdersReportGenerator
 from ...services.settings_service import SettingsService
 from ...models.order import OrderStatus
 from ..dependencies import get_order_service, get_settings_service
@@ -418,4 +419,159 @@ def generate_order_receipt_file(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating receipt: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Error generating receipt: {str(e)}")
+
+
+# ===== REPORTE DE ÓRDENES EN PDF =====
+
+@router.get("/report/pdf", response_class=StreamingResponse)
+def download_orders_report_pdf(
+    status_filter: Optional[str] = Query(None, description="Filter by order status"),
+    route_id: Optional[int] = Query(None, description="Filter by route ID"),
+    date_from: Optional[date] = Query(None, description="Filter orders from this date (YYYY-MM-DD)"),
+    date_to: Optional[date] = Query(None, description="Filter orders to this date (YYYY-MM-DD)"),
+    search: Optional[str] = Query(None, description="Search by order number or client name"),
+    db: Session = Depends(get_tenant_db),
+    order_service: OrderService = Depends(get_order_service),
+    settings_service: SettingsService = Depends(get_settings_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Download orders report PDF with filters
+    
+    Genera un PDF con múltiples órdenes agrupadas por cliente.
+    El PDF incluye:
+    - Encabezado con logo, nombre y teléfono de la empresa
+    - Órdenes organizadas por cliente con información compacta
+    - Solo nombre, número, dirección del cliente
+    - Por cada orden: número, fecha, detalle de productos, total
+    - Resumen general por estado
+    
+    Filters (same as get orders endpoint):
+    - status_filter: Filter by order status (pending, confirmed, in_progress, shipped, delivered, cancelled)
+    - route_id: Filter by specific route ID
+    - date_from: Show orders from this date onwards (inclusive)
+    - date_to: Show orders up to this date (inclusive) 
+    - search: Search by order number or client name (case-insensitive partial matching)
+    """
+    try:
+        # Verificar permisos
+        if not can_view_orders(current_user):
+            raise HTTPException(
+                status_code=403, 
+                detail="No tienes permisos para generar reportes de pedidos."
+            )
+        
+        # Validate date range
+        if date_from and date_to and date_from > date_to:
+            raise HTTPException(
+                status_code=400, 
+                detail="date_from cannot be later than date_to"
+            )
+        
+        # Convert status filter to enum if provided
+        status_enum = None
+        if status_filter:
+            try:
+                status_enum = OrderStatus(status_filter)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid status: {status_filter}. Valid values are: {', '.join([s.value for s in OrderStatus])}"
+                )
+        
+        # Get filtered orders (without pagination to get all results)
+        orders = order_service.get_orders_with_filters(
+            db, 
+            skip=0, 
+            limit=10000,  # Large limit to get all orders
+            status=status_enum,
+            route_id=route_id,
+            date_from=date_from,
+            date_to=date_to,
+            search=search
+        )
+        
+        if not orders:
+            raise HTTPException(
+                status_code=404,
+                detail="No se encontraron órdenes con los filtros especificados"
+            )
+        
+        # Get company settings
+        settings = settings_service.get_company_settings(db)
+        if not settings:
+            raise HTTPException(
+                status_code=404, 
+                detail="Company settings not found. Please configure company information first."
+            )
+        
+        # Create report generator
+        report_generator = OrdersReportGenerator()
+        
+        # Get order objects for PDF generation (need the raw objects, not processed responses)
+        from ...repositories.order_repository import OrderRepository
+        order_repo = OrderRepository()
+        
+        # Get raw order objects using their IDs
+        order_ids = [order.id for order in orders]
+        raw_orders = []
+        for order_id in order_ids:
+            raw_order = order_repo.get(db, order_id)
+            if raw_order:
+                raw_orders.append(raw_order)
+        
+        if not raw_orders:
+            raise HTTPException(status_code=404, detail="Orders not found")
+        
+        # Generate title based on filters
+        title_parts = ["Reporte de Órdenes"]
+        
+        # Add route name if filtered by route
+        if route_id:
+            from ...repositories.route_repository import RouteRepository
+            route_repo = RouteRepository()
+            route = route_repo.get(db, route_id)
+            if route:
+                title_parts.append(f"- Ruta: {route.name}")
+        
+        # Add status filter
+        if status_filter:
+            status_names = {
+                'pending': 'Pendientes',
+                'confirmed': 'Confirmadas', 
+                'in_progress': 'En Proceso',
+                'shipped': 'Enviadas',
+                'delivered': 'Entregadas',
+                'cancelled': 'Canceladas'
+            }
+            title_parts.append(f"- {status_names.get(status_filter, status_filter.title())}")
+        
+        # Add date range
+        if date_from or date_to:
+            if date_from and date_to:
+                title_parts.append(f"({date_from.strftime('%d/%m/%Y')} - {date_to.strftime('%d/%m/%Y')})")
+            elif date_from:
+                title_parts.append(f"(desde {date_from.strftime('%d/%m/%Y')})")
+            elif date_to:
+                title_parts.append(f"(hasta {date_to.strftime('%d/%m/%Y')})")
+        
+        report_title = " ".join(title_parts)
+        
+        # Generate PDF buffer
+        pdf_buffer = report_generator.generate_report_buffer(raw_orders, settings, report_title)
+        
+        # Set filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"reporte_ordenes_{timestamp}.pdf"
+        
+        # Return as streaming response
+        return StreamingResponse(
+            BytesIO(pdf_buffer.getvalue()),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating orders report: {str(e)}") 
