@@ -27,6 +27,8 @@ boto3 = "*"
 [dev-packages]
 pytest = "*"
 pytest-asyncio = "*"
+pytest-cov = "*"
+httpx = "*"
 black = "*"
 flake8 = "*"
 mypy = "*"
