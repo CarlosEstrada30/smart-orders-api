@@ -448,6 +448,129 @@ def generate_order_receipt_file(
 
 # ===== REPORTE DE ÓRDENES EN PDF =====
 
+# Helper functions for complex report generation
+def _validate_report_permissions(current_user: User):
+    """Validate user permissions for report generation"""
+    if not can_view_orders(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para generar reportes de pedidos."
+        )
+
+
+def _validate_date_range(date_from: Optional[date], date_to: Optional[date]):
+    """Validate date range parameters"""
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(
+            status_code=400,
+            detail="date_from cannot be later than date_to"
+        )
+
+
+def _parse_status_filter(
+        status_filter: Optional[str]) -> Optional[OrderStatus]:
+    """Parse and validate status filter"""
+    if not status_filter:
+        return None
+
+    try:
+        return OrderStatus(status_filter)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status: {status_filter}. Valid values are: {', '.join([s.value for s in OrderStatus])}"
+        )
+
+
+def _get_filtered_orders(order_service, db, status_enum,
+                         route_id, date_from, date_to, search):
+    """Get orders with applied filters"""
+    orders = order_service.get_orders_with_filters(
+        db,
+        skip=0,
+        limit=10000,  # Large limit to get all orders
+        status=status_enum,
+        route_id=route_id,
+        date_from=date_from,
+        date_to=date_to,
+        search=search
+    )
+
+    if not orders:
+        raise HTTPException(
+            status_code=404,
+            detail="No se encontraron órdenes con los filtros especificados")
+
+    return orders
+
+
+def _get_company_settings(settings_service, db):
+    """Get company settings for report"""
+    settings = settings_service.get_company_settings(db)
+    if not settings:
+        raise HTTPException(
+            status_code=404,
+            detail="Company settings not found. Please configure company information first."
+        )
+    return settings
+
+
+def _get_raw_orders(db, orders):
+    """Convert order responses to raw order objects for PDF generation"""
+    from ...repositories.order_repository import OrderRepository
+    order_repo = OrderRepository()
+
+    order_ids = [order.id for order in orders]
+    raw_orders = []
+    for order_id in order_ids:
+        raw_order = order_repo.get(db, order_id)
+        if raw_order:
+            raw_orders.append(raw_order)
+
+    if not raw_orders:
+        raise HTTPException(status_code=404, detail="Orders not found")
+
+    return raw_orders
+
+
+def _generate_report_title(status_filter, route_id, date_from, date_to, db):
+    """Generate report title based on filters"""
+    title_parts = ["Reporte de Órdenes"]
+
+    # Add route name if filtered by route
+    if route_id:
+        from ...repositories.route_repository import RouteRepository
+        route_repo = RouteRepository()
+        route = route_repo.get(db, route_id)
+        if route:
+            title_parts.append(f"- Ruta: {route.name}")
+
+    # Add status filter
+    if status_filter:
+        status_names = {
+            'pending': 'Pendientes',
+            'confirmed': 'Confirmadas',
+            'in_progress': 'En Proceso',
+            'shipped': 'Enviadas',
+            'delivered': 'Entregadas',
+            'cancelled': 'Canceladas'
+        }
+        title_parts.append(
+            f"- {status_names.get(status_filter, status_filter.title())}")
+
+    # Add date range
+    if date_from or date_to:
+        if date_from and date_to:
+            title_parts.append(
+                f"({date_from.strftime('%d/%m/%Y')} - {date_to.strftime('%d/%m/%Y')})")
+        elif date_from:
+            title_parts.append(f"(desde {date_from.strftime('%d/%m/%Y')})")
+        elif date_to:
+            title_parts.append(f"(hasta {date_to.strftime('%d/%m/%Y')})")
+
+    return " ".join(title_parts)
+
+
 @router.get("/report/pdf", response_class=StreamingResponse)
 def download_orders_report_pdf(
         status_filter: Optional[str] = Query(
@@ -487,112 +610,27 @@ def download_orders_report_pdf(
     - search: Search by order number or client name (case-insensitive partial matching)
     """
     try:
-        # Verificar permisos
-        if not can_view_orders(current_user):
-            raise HTTPException(
-                status_code=403,
-                detail="No tienes permisos para generar reportes de pedidos."
-            )
+        _validate_report_permissions(current_user)
+        _validate_date_range(date_from, date_to)
 
-        # Validate date range
-        if date_from and date_to and date_from > date_to:
-            raise HTTPException(
-                status_code=400,
-                detail="date_from cannot be later than date_to"
-            )
+        status_enum = _parse_status_filter(status_filter)
 
-        # Convert status filter to enum if provided
-        status_enum = None
-        if status_filter:
-            try:
-                status_enum = OrderStatus(status_filter)
-            except ValueError:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid status: {status_filter}. Valid values are: {', '.join([s.value for s in OrderStatus])}"
-                )
-
-        # Get filtered orders (without pagination to get all results)
-        orders = order_service.get_orders_with_filters(
+        orders = _get_filtered_orders(
+            order_service,
             db,
-            skip=0,
-            limit=10000,  # Large limit to get all orders
-            status=status_enum,
-            route_id=route_id,
-            date_from=date_from,
-            date_to=date_to,
-            search=search
-        )
+            status_enum,
+            route_id,
+            date_from,
+            date_to,
+            search)
+        settings = _get_company_settings(settings_service, db)
+        raw_orders = _get_raw_orders(db, orders)
 
-        if not orders:
-            raise HTTPException(
-                status_code=404,
-                detail="No se encontraron órdenes con los filtros especificados")
-
-        # Get company settings
-        settings = settings_service.get_company_settings(db)
-        if not settings:
-            raise HTTPException(
-                status_code=404,
-                detail="Company settings not found. Please configure company information first."
-            )
-
-        # Create report generator
-        report_generator = OrdersReportGenerator()
-
-        # Get order objects for PDF generation (need the raw objects, not
-        # processed responses)
-        from ...repositories.order_repository import OrderRepository
-        order_repo = OrderRepository()
-
-        # Get raw order objects using their IDs
-        order_ids = [order.id for order in orders]
-        raw_orders = []
-        for order_id in order_ids:
-            raw_order = order_repo.get(db, order_id)
-            if raw_order:
-                raw_orders.append(raw_order)
-
-        if not raw_orders:
-            raise HTTPException(status_code=404, detail="Orders not found")
-
-        # Generate title based on filters
-        title_parts = ["Reporte de Órdenes"]
-
-        # Add route name if filtered by route
-        if route_id:
-            from ...repositories.route_repository import RouteRepository
-            route_repo = RouteRepository()
-            route = route_repo.get(db, route_id)
-            if route:
-                title_parts.append(f"- Ruta: {route.name}")
-
-        # Add status filter
-        if status_filter:
-            status_names = {
-                'pending': 'Pendientes',
-                'confirmed': 'Confirmadas',
-                'in_progress': 'En Proceso',
-                'shipped': 'Enviadas',
-                'delivered': 'Entregadas',
-                'cancelled': 'Canceladas'
-            }
-            title_parts.append(
-                f"- {status_names.get(status_filter, status_filter.title())}")
-
-        # Add date range
-        if date_from or date_to:
-            if date_from and date_to:
-                title_parts.append(
-                    f"({date_from.strftime('%d/%m/%Y')} - {date_to.strftime('%d/%m/%Y')})")
-            elif date_from:
-                title_parts.append(f"(desde {date_from.strftime('%d/%m/%Y')})")
-            elif date_to:
-                title_parts.append(f"(hasta {date_to.strftime('%d/%m/%Y')})")
-
-        report_title = " ".join(title_parts)
+        report_title = _generate_report_title(
+            status_filter, route_id, date_from, date_to, db)
 
         # Generate PDF buffer
+        report_generator = OrdersReportGenerator()
         pdf_buffer = report_generator.generate_report_buffer(
             raw_orders, settings, report_title)
 

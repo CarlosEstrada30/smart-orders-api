@@ -328,6 +328,38 @@ class InventoryEntryService:
             db, product_id=product_id)
         return [InventoryReport(**item) for item in report_data]
 
+    def _validate_products(self, db: Session, entry, validation_results: dict):
+        """Validate that all products exist and are active"""
+        for item in entry.items:
+            product = self.product_repository.get(db, item.product_id)
+            if not product:
+                validation_results["errors"].append(
+                    f"Product {item.product_id} not found")
+                validation_results["valid"] = False
+            elif not product.is_active:
+                validation_results["errors"].append(
+                    f"Product {product.name} is inactive")
+                validation_results["valid"] = False
+
+    def _validate_costs(self, entry, validation_results: dict):
+        """Validate costs for entry items if requested"""
+        for item in entry.items:
+            if item.unit_cost < 0:
+                validation_results["errors"].append(
+                    f"Negative unit cost for product {item.product_id}")
+                validation_results["valid"] = False
+            elif item.unit_cost == 0 and entry.entry_type in [EntryType.PURCHASE, EntryType.PRODUCTION]:
+                validation_results["warnings"].append(
+                    f"Zero cost for product {item.product_id} in {entry.entry_type} entry")
+
+    def _validate_stock_quantities(self, entry, validation_results: dict):
+        """Validate stock quantities for entry items if requested"""
+        for item in entry.items:
+            if item.quantity <= 0:
+                validation_results["errors"].append(
+                    f"Invalid quantity for product {item.product_id}")
+                validation_results["valid"] = False
+
     def validate_entry(
             self,
             db: Session,
@@ -344,36 +376,16 @@ class InventoryEntryService:
             "warnings": []
         }
 
-        # Validate products
-        for item in entry.items:
-            product = self.product_repository.get(db, item.product_id)
-            if not product:
-                validation_results["errors"].append(
-                    f"Product {item.product_id} not found")
-                validation_results["valid"] = False
-            elif not product.is_active:
-                validation_results["errors"].append(
-                    f"Product {product.name} is inactive")
-                validation_results["valid"] = False
+        # Validate products exist and are active
+        self._validate_products(db, entry, validation_results)
 
         # Validate costs if requested
         if validation_request.validate_costs:
-            for item in entry.items:
-                if item.unit_cost < 0:
-                    validation_results["errors"].append(
-                        f"Negative unit cost for product {item.product_id}")
-                    validation_results["valid"] = False
-                elif item.unit_cost == 0 and entry.entry_type in [EntryType.PURCHASE, EntryType.PRODUCTION]:
-                    validation_results["warnings"].append(
-                        f"Zero cost for product {item.product_id} in {entry.entry_type} entry")
+            self._validate_costs(entry, validation_results)
 
-        # Validate stock if requested
+        # Validate stock quantities if requested
         if validation_request.validate_stock:
-            for item in entry.items:
-                if item.quantity <= 0:
-                    validation_results["errors"].append(
-                        f"Invalid quantity for product {item.product_id}")
-                    validation_results["valid"] = False
+            self._validate_stock_quantities(entry, validation_results)
 
         return validation_results
 

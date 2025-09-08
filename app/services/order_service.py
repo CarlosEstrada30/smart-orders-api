@@ -179,23 +179,22 @@ class OrderService:
             limit=limit
         )
 
-    def create_order(
-            self,
-            db: Session,
-            order_data: OrderCreate) -> OrderResponse:
-        # Validate client exists and is active
-        client = self.client_repository.get(db, order_data.client_id)
+    def _validate_client(self, db: Session, client_id: int):
+        """Validate client exists and is active"""
+        client = self.client_repository.get(db, client_id)
         if not client or not client.is_active:
             raise ValueError("Client not found or inactive")
 
-        # Validate route exists and is active (if provided)
-        if order_data.route_id:
-            route = self.route_repository.get(db, order_data.route_id)
+    def _validate_route(self, db: Session, route_id: Optional[int]):
+        """Validate route exists and is active if provided"""
+        if route_id:
+            route = self.route_repository.get(db, route_id)
             if not route or not route.is_active:
                 raise ValueError("Route not found or inactive")
 
-        # Validate all products exist, are active, and have sufficient stock
-        for item in order_data.items:
+    def _validate_products_and_stock(self, db: Session, items):
+        """Validate all products exist, are active, and have sufficient stock"""
+        for item in items:
             product = self.product_repository.get(db, item.product_id)
             if not product or not product.is_active:
                 raise ValueError(
@@ -206,12 +205,28 @@ class OrderService:
                 raise ValueError(
                     f"Insufficient stock for product {product.name}")
 
-        # Reserve stock for all items
-        for item in order_data.items:
+    def _reserve_stock_for_items(self, db: Session, items):
+        """Reserve stock for all items"""
+        for item in items:
             if not self.product_service.reserve_stock(
                     db, item.product_id, item.quantity):
                 raise ValueError(
                     f"Failed to reserve stock for product {item.product_id}")
+
+    def _restore_stock_for_items(self, db: Session, items):
+        """Restore stock for all items in case of failure"""
+        for item in items:
+            self.product_service.update_stock(
+                db, item.product_id, item.quantity)
+
+    def create_order(
+            self,
+            db: Session,
+            order_data: OrderCreate) -> OrderResponse:
+        self._validate_client(db, order_data.client_id)
+        self._validate_route(db, order_data.route_id)
+        self._validate_products_and_stock(db, order_data.items)
+        self._reserve_stock_for_items(db, order_data.items)
 
         # Create the order
         try:
@@ -220,9 +235,7 @@ class OrderService:
             return self._process_order_response(order)
         except Exception as e:
             # If order creation fails, restore stock
-            for item in order_data.items:
-                self.product_service.update_stock(
-                    db, item.product_id, item.quantity)
+            self._restore_stock_for_items(db, order_data.items)
             raise e
 
     def update_order_status(
