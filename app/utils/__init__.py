@@ -22,7 +22,7 @@ from .permissions import (
 
 __all__ = [
     "has_permission",
-    "can_manage_inventory", 
+    "can_manage_inventory",
     "can_approve_inventory",
     "can_complete_inventory",
     "can_manage_orders",

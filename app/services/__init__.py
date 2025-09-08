@@ -8,10 +8,10 @@ from .settings_service import SettingsService
 
 __all__ = [
     "UserService",
-    "ClientService", 
+    "ClientService",
     "ProductService",
     "OrderService",
     "RouteService",
     "TenantService",
     "SettingsService"
-] 
+]

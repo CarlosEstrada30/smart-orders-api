@@ -32,6 +32,8 @@ httpx = "*"
 black = "*"
 flake8 = "*"
 mypy = "*"
+autopep8 = "*"
+autoflake = "*"
 
 [requires]
 python_version = "3.8"

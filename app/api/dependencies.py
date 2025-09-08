@@ -1,5 +1,3 @@
-from sqlalchemy.orm import Session
-from ..database import get_db
 from ..services.user_service import UserService
 from ..services.client_service import ClientService
 from ..services.product_service import ProductService
@@ -49,4 +47,4 @@ def get_tenant_service() -> TenantService:
 
 
 def get_settings_service() -> SettingsService:
-    return SettingsService() 
+    return SettingsService()

@@ -53,4 +53,3 @@ class SettingsFormData(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     website: Optional[str] = None
-

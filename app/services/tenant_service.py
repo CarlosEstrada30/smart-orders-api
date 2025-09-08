@@ -3,12 +3,15 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 import logging
 from ..repositories.tenant_repository import TenantRepository
-from ..schemas.tenant import TenantCreate, TenantUpdate, TenantResponse
+from ..schemas.tenant import TenantCreate, TenantUpdate
 from ..schemas.user import UserCreate
 from ..models.tenant import Tenant
 from ..models.user import UserRole
 from ..services.user_service import UserService
-from ..utils.tenant_db import create_schema_if_not_exists, run_migrations_for_schema, drop_schema_if_exists, get_session_for_schema
+from ..utils.tenant_db import (
+    create_schema_if_not_exists, run_migrations_for_schema,
+    drop_schema_if_exists, get_session_for_schema
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +27,18 @@ class TenantService:
     def get_tenant_by_token(self, db: Session, token: str) -> Optional[Tenant]:
         return self.repository.get_by_token(db, token=token)
 
-    def get_tenant_by_subdominio(self, db: Session, subdominio: str) -> Optional[Tenant]:
+    def get_tenant_by_subdominio(
+            self,
+            db: Session,
+            subdominio: str) -> Optional[Tenant]:
         return self.repository.get_by_subdominio(db, subdominio=subdominio)
 
-    def get_tenants(self, db: Session, skip: int = 0, limit: int = 100, include_inactive: bool = False) -> List[Tenant]:
+    def get_tenants(
+            self,
+            db: Session,
+            skip: int = 0,
+            limit: int = 100,
+            include_inactive: bool = False) -> List[Tenant]:
         """Obtiene tenants. Por defecto solo los activos."""
         if include_inactive:
             return self.repository.get_all_tenants(db, skip=skip, limit=limit)
@@ -44,25 +55,27 @@ class TenantService:
         try:
             # Validar que no exista un tenant activo con el mismo subdominio
             # (El token se autogenera como UUID, por lo que no necesita validación)
-            if self.repository.get_by_subdominio(db, subdominio=tenant.subdominio):
-                raise ValueError("Ya existe un tenant activo con este subdominio")
+            if self.repository.get_by_subdominio(
+                    db, subdominio=tenant.subdominio):
+                raise ValueError(
+                    "Ya existe un tenant activo con este subdominio")
 
             # Crear datos del tenant con schema generado
             tenant_data = tenant.model_dump()
-            
+
             # Generar token UUID manualmente
             import uuid
             token = str(uuid.uuid4())
             tenant_data['token'] = token
-            
+
             # Generar el nombre del schema
             clean_name = tenant_data['nombre'].replace(" ", "").lower()
             schema_name = f"{clean_name}_{token.lower()}"
             tenant_data['schema_name'] = schema_name
-            
+
             # Establecer como activo por defecto
             tenant_data['active'] = True
-            
+
             # Validar que no exista otro tenant activo con el mismo schema
             if self.repository.get_by_schema_name(db, schema_name=schema_name):
                 raise ValueError("Ya existe un tenant activo con este schema")
@@ -72,21 +85,25 @@ class TenantService:
             db.add(db_tenant)
             db.commit()
             db.refresh(db_tenant)
-            
+
             # Crear el schema en la base de datos
             if not create_schema_if_not_exists(db_tenant.schema_name):
-                raise ValueError(f"No se pudo crear el schema '{db_tenant.schema_name}'")
-            
+                raise ValueError(
+                    f"No se pudo crear el schema '{db_tenant.schema_name}'")
+
             # Ejecutar migraciones en el nuevo schema
             if not run_migrations_for_schema(db_tenant.schema_name):
-                raise ValueError(f"No se pudieron ejecutar las migraciones en el schema '{db_tenant.schema_name}'")
-            
+                raise ValueError(
+                    f"No se pudieron ejecutar las migraciones en el schema '{db_tenant.schema_name}'")
+
             # Crear superusuario por defecto para el tenant
-            self._create_default_superuser(db_tenant.schema_name, db_tenant.subdominio)
-            
-            logger.info(f"Tenant creado exitosamente: {db_tenant.id}, Schema: {db_tenant.schema_name}, Is Trial: {db_tenant.is_trial}")
+            self._create_default_superuser(
+                db_tenant.schema_name, db_tenant.subdominio)
+
+            logger.info(
+                f"Tenant creado exitosamente: {db_tenant.id}, Schema: {db_tenant.schema_name}, Is Trial: {db_tenant.is_trial}")
             return db_tenant
-            
+
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error de base de datos al crear tenant: {str(e)}")
@@ -96,22 +113,26 @@ class TenantService:
             logger.error(f"Error al crear tenant: {str(e)}")
             raise ValueError(f"Error al crear tenant: {str(e)}")
 
-
-
-    def update_tenant(self, db: Session, tenant_id: int, tenant_update: TenantUpdate) -> Optional[Tenant]:
+    def update_tenant(
+            self,
+            db: Session,
+            tenant_id: int,
+            tenant_update: TenantUpdate) -> Optional[Tenant]:
         db_tenant = self.repository.get(db, tenant_id)
         if not db_tenant:
             return None
-        
+
         update_data = tenant_update.model_dump(exclude_unset=True)
-        
+
         # Validar unicidad si se actualiza subdominio
         # (El token no es actualizable, se autogenera como UUID)
         if "subdominio" in update_data:
-            existing = self.repository.get_by_subdominio(db, subdominio=update_data["subdominio"])
+            existing = self.repository.get_by_subdominio(
+                db, subdominio=update_data["subdominio"])
             if existing and existing.id != tenant_id:
-                raise ValueError("Ya existe un tenant activo con este subdominio")
-        
+                raise ValueError(
+                    "Ya existe un tenant activo con este subdominio")
+
         return self.repository.update(db, db_obj=db_tenant, obj_in=update_data)
 
     def delete_tenant(self, db: Session, tenant_id: int) -> Optional[Tenant]:
@@ -127,11 +148,15 @@ class TenantService:
         """
         return self.repository.restore(db, id=tenant_id)
 
-    def permanently_delete_tenant(self, db: Session, tenant_id: int, delete_schema: bool = False) -> Optional[Tenant]:
+    def permanently_delete_tenant(
+            self,
+            db: Session,
+            tenant_id: int,
+            delete_schema: bool = False) -> Optional[Tenant]:
         """
         Elimina permanentemente un tenant de la base de datos
         NOTA: Esta operación es destructiva e irreversible
-        
+
         Args:
             tenant_id: ID del tenant a eliminar
             delete_schema: Si True, también elimina el schema (por defecto False por seguridad)
@@ -139,32 +164,35 @@ class TenantService:
         db_tenant = self.repository.get(db, tenant_id)
         if not db_tenant:
             return None
-        
+
         schema_name = db_tenant.schema_name
-        
+
         # Eliminar el tenant de la base de datos
         deleted_tenant = self.repository.remove(db, id=tenant_id)
-        
+
         # Eliminar el schema si se solicita explícitamente
         if delete_schema:
             logger.warning(f"Eliminando schema permanentemente: {schema_name}")
             self.drop_tenant_schema(schema_name)
-        
+
         return deleted_tenant
 
     def drop_tenant_schema(self, schema_name: str) -> bool:
         """
         Elimina el schema de un tenant - OPERACIÓN DESTRUCTIVA
-        
+
         Returns:
             bool: True si se eliminó exitosamente, False en caso contrario
         """
         return drop_schema_if_exists(schema_name)
-    
-    def _create_default_superuser(self, schema_name: str, subdominio: str) -> None:
+
+    def _create_default_superuser(
+            self,
+            schema_name: str,
+            subdominio: str) -> None:
         """
         Crea un superusuario por defecto en el schema del tenant
-        
+
         Args:
             schema_name: Nombre del schema del tenant
             subdominio: Subdominio del tenant para generar credenciales
@@ -172,13 +200,13 @@ class TenantService:
         try:
             # Crear sesión específica para el schema del tenant
             tenant_db = get_session_for_schema(schema_name)
-            
+
             # Generar credenciales basadas en el subdominio
             admin_email = f"admin@{subdominio}.com"
             admin_password = f"admin{subdominio}123"
             admin_username = f"admin_{subdominio}"
             admin_full_name = f"Administrador {subdominio.title()}"
-            
+
             # Crear datos del usuario administrador
             admin_user_data = UserCreate(
                 email=admin_email,
@@ -188,19 +216,23 @@ class TenantService:
                 is_superuser=True,
                 role=UserRole.ADMIN
             )
-            
+
             try:
                 # Crear el usuario administrador en el schema del tenant
                 self.user_service.create_user(tenant_db, admin_user_data)
-                logger.info(f"Superusuario creado exitosamente para tenant: {admin_email}")
-                
+                logger.info(
+                    f"Superusuario creado exitosamente para tenant: {admin_email}")
+
             except ValueError as e:
-                logger.warning(f"No se pudo crear superusuario para tenant {subdominio}: {str(e)}")
-                # No lanzar excepción aquí para no fallar la creación del tenant
-                
+                logger.warning(
+                    f"No se pudo crear superusuario para tenant {subdominio}: {str(e)}")
+                # No lanzar excepción aquí para no fallar la creación del
+                # tenant
+
             finally:
                 tenant_db.close()
-                
+
         except Exception as e:
-            logger.error(f"Error creando superusuario para tenant {subdominio}: {str(e)}")
+            logger.error(
+                f"Error creando superusuario para tenant {subdominio}: {str(e)}")
             # No lanzar excepción aquí para no fallar la creación del tenant

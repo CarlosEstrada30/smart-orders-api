@@ -1,7 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from ...database import get_db
 from ...schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from ...services.product_service import ProductService
 from ..dependencies import get_product_service
@@ -11,7 +10,8 @@ from ...models.user import User
 router = APIRouter(prefix="/products", tags=["products"])
 
 
-@router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ProductResponse,
+             status_code=status.HTTP_201_CREATED)
 def create_product(
     product: ProductCreate,
     db: Session = Depends(get_tenant_db),
@@ -98,7 +98,8 @@ def update_product(
 ):
     """Update a product (requires authentication)"""
     try:
-        product = product_service.update_product(db, product_id, product_update)
+        product = product_service.update_product(
+            db, product_id, product_update)
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
         return product
@@ -149,4 +150,4 @@ def update_stock(
             raise HTTPException(status_code=404, detail="Product not found")
         return product
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) 
+        raise HTTPException(status_code=400, detail=str(e))

@@ -14,7 +14,8 @@ class PaginationInfo(BaseModel):
     pages: int = Field(..., description="Total number of pages")
     per_page: int = Field(..., description="Records per page")
     has_next: bool = Field(..., description="Whether there is a next page")
-    has_previous: bool = Field(..., description="Whether there is a previous page")
+    has_previous: bool = Field(...,
+                               description="Whether there is a previous page")
 
 
 class PaginatedResponse(BaseModel, Generic[T]):

@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 from ...database import get_db
 from ...schemas.auth import Token, LoginRequest
 from ...services.auth_service import AuthService
-from ...services.user_service import UserService
 from ...services.tenant_service import TenantService
 from ...models.user import User
 from ...utils.permissions import get_user_permissions
@@ -29,7 +28,7 @@ def get_tenant_db(
 ) -> Session:
     """
     Extrae el tenant_schema del JWT y retorna la sesión de BD correspondiente.
-    
+
     Funciona tanto para esquema 'public' como para tenants específicos.
     Esta es la función central para multi-tenancy.
     """
@@ -42,17 +41,17 @@ def get_tenant_db(
                 detail="Could not validate credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
+
         # Extraer el schema del tenant (puede ser "public" o schema específico)
         tenant_schema = token_data.tenant_schema
         if not tenant_schema:
             # Fallback a public si no hay tenant_schema en el JWT
             tenant_schema = "public"
-        
+
         # Retornar sesión para el schema correspondiente
         return get_session_for_schema(tenant_schema)
-        
-    except Exception as e:
+
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -77,7 +76,8 @@ def get_current_user(
     return user
 
 
-def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+def get_current_active_user(
+        current_user: User = Depends(get_current_user)) -> User:
     """Get current active user"""
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
@@ -92,70 +92,75 @@ def login(
     tenant_service: TenantService = Depends(get_tenant_service)
 ):
     """Login endpoint to authenticate user with tenant support and get JWT token"""
-    
+
     # Si no se especifica subdominio, usar el esquema public por defecto
     if not login_data.subdominio:
         # Autenticación en esquema public (sin tenant específico)
-        user = auth_service.authenticate_user(db, login_data.email, login_data.password)
+        user = auth_service.authenticate_user(
+            db, login_data.email, login_data.password)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
+
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Inactive user"
             )
-        
+
         # Crear JWT sin información de tenant específico (esquema public)
-        access_token_expires = timedelta(minutes=auth_service.access_token_expire_minutes)
+        access_token_expires = timedelta(
+            minutes=auth_service.access_token_expire_minutes)
         token_data = {
             "sub": user.email,
             "tenant": {
                 "tenant_schema": "public"
             }
         }
-        
+
         access_token = auth_service.create_access_token(
             data=token_data, expires_delta=access_token_expires
         )
-        
+
         return {"access_token": access_token, "token_type": "bearer"}
-    
+
     # Si se especifica subdominio, procesar con lógica de tenant
     else:
         # 1. Buscar el tenant por subdominio en el esquema public
-        tenant = tenant_service.get_tenant_by_subdominio(db, login_data.subdominio)
+        tenant = tenant_service.get_tenant_by_subdominio(
+            db, login_data.subdominio)
         if not tenant:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Tenant not found for the provided subdomain",
             )
-        
+
         # 2. Crear sesión específica para el schema del tenant
         tenant_db = get_session_for_schema(tenant.schema_name)
-        
+
         try:
             # 3. Autenticar usuario en el schema del tenant
-            user = auth_service.authenticate_user(tenant_db, login_data.email, login_data.password)
+            user = auth_service.authenticate_user(
+                tenant_db, login_data.email, login_data.password)
             if not user:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Incorrect email or password",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
-            
+
             if not user.is_active:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Inactive user"
                 )
-            
+
             # 4. Crear JWT con información del tenant
-            access_token_expires = timedelta(minutes=auth_service.access_token_expire_minutes)
+            access_token_expires = timedelta(
+                minutes=auth_service.access_token_expire_minutes)
             token_data = {
                 "sub": user.email,
                 "tenant": {
@@ -165,20 +170,21 @@ def login(
                     "tenant_subdomain": tenant.subdominio
                 }
             }
-            
+
             access_token = auth_service.create_access_token(
                 data=token_data, expires_delta=access_token_expires
             )
-            
+
             return {"access_token": access_token, "token_type": "bearer"}
-        
+
         finally:
             # 5. Cerrar la sesión del tenant
             tenant_db.close()
 
 
 @router.get("/me", response_model=dict)
-def get_current_user_info(current_user: User = Depends(get_current_active_user)):
+def get_current_user_info(
+        current_user: User = Depends(get_current_active_user)):
     """Get current user information"""
     return {
         "id": current_user.id,
@@ -192,6 +198,7 @@ def get_current_user_info(current_user: User = Depends(get_current_active_user))
 
 
 @router.get("/permissions", response_model=dict)
-def get_current_user_permissions(current_user: User = Depends(get_current_active_user)):
+def get_current_user_permissions(
+        current_user: User = Depends(get_current_active_user)):
     """Get current user permissions for frontend"""
-    return get_user_permissions(current_user) 
+    return get_user_permissions(current_user)

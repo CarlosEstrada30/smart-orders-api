@@ -1,6 +1,5 @@
 from typing import Generic, TypeVar, Type, Optional, List, Any, Dict, Union
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update, delete
 from pydantic import BaseModel
 from ..database import Base
 
@@ -53,4 +52,4 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         obj = db.query(self.model).get(id)
         db.delete(obj)
         db.commit()
-        return obj 
+        return obj

@@ -6,8 +6,13 @@ from ..models.inventory_entry import EntryType, EntryStatus
 
 class InventoryEntryItemBase(BaseModel):
     product_id: int
-    quantity: int = Field(..., gt=0, description="Quantity must be greater than 0")
-    unit_cost: float = Field(default=0.0, ge=0, description="Unit cost must be non-negative")
+    quantity: int = Field(...,
+                          gt=0,
+                          description="Quantity must be greater than 0")
+    unit_cost: float = Field(
+        default=0.0,
+        ge=0,
+        description="Unit cost must be non-negative")
     batch_number: Optional[str] = Field(None, max_length=100)
     expiry_date: Optional[datetime] = None
     notes: Optional[str] = None
@@ -122,7 +127,8 @@ class BatchUpdateRequest(BaseModel):
 class StockAdjustmentRequest(BaseModel):
     """For quick stock adjustments"""
     product_id: int
-    quantity: int = Field(..., description="Positive for increase, negative for decrease")
+    quantity: int = Field(...,
+                          description="Positive for increase, negative for decrease")
     reason: str = Field(..., max_length=255)
     notes: Optional[str] = None
 
@@ -144,4 +150,3 @@ class EntryValidationRequest(BaseModel):
     entry_id: int
     validate_stock: bool = True
     validate_costs: bool = True
-

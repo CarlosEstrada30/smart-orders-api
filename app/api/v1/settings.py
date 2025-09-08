@@ -42,11 +42,11 @@ def get_current_tenant(
         token_data = auth_service.verify_token(credentials.credentials)
         if not token_data or not token_data.tenant_id:
             return None
-        
+
         # Obtener el tenant completo desde la base de datos public
         tenant = tenant_service.get_tenant(db, token_data.tenant_id)
         return tenant
-        
+
     except Exception:
         return None
 
@@ -59,18 +59,19 @@ def _validate_logo_file(logo: UploadFile, content: bytes) -> None:
             status_code=400,
             detail=f"File type {logo.content_type} not allowed. Allowed types: {', '.join(ALLOWED_LOGO_TYPES.keys())}"
         )
-    
+
     # Validar tamaño de archivo
     if len(content) > MAX_LOGO_SIZE:
         raise HTTPException(
             status_code=400,
             detail=f"File size exceeds maximum allowed size of {MAX_LOGO_SIZE / 1024 / 1024:.1f}MB"
         )
-    
+
     # Validar extensión de archivo
     filename = logo.filename or ""
     file_extension = filename.lower().split('.')[-1] if '.' in filename else ""
-    if f".{file_extension}" not in ALLOWED_LOGO_TYPES.get(logo.content_type, []):
+    if f".{file_extension}" not in ALLOWED_LOGO_TYPES.get(
+            logo.content_type, []):
         raise HTTPException(
             status_code=400,
             detail="File extension doesn't match content type"
@@ -89,7 +90,7 @@ def get_company_settings(
 
 def _create_settings_from_form(
     company_name: str,
-    business_name: str, 
+    business_name: str,
     nit: str,
     address: Optional[str] = None,
     phone: Optional[str] = None,
@@ -108,7 +109,8 @@ def _create_settings_from_form(
     )
 
 
-@router.post("/", response_model=SettingsResponse, status_code=status.HTTP_200_OK)
+@router.post("/", response_model=SettingsResponse,
+             status_code=status.HTTP_200_OK)
 async def save_company_settings(
     company_name: str = Form(...),
     business_name: str = Form(...),
@@ -125,7 +127,7 @@ async def save_company_settings(
 ):
     """
     Create or update company settings with optional logo upload in a single request
-    
+
     This endpoint handles both creating new settings and updating existing ones.
     Only one settings record is allowed per tenant.
     """
@@ -140,25 +142,25 @@ async def save_company_settings(
             email=email,
             website=website
         )
-        
+
         # Convertir a dict para el service (manteniendo solo campos no None)
         settings_data = settings_form.model_dump(exclude_unset=True)
         settings_data["is_active"] = True
-        
+
         # Procesar logo si se proporciona
         logo_file = None
         logo_filename = None
         logo_content_type = None
-        
+
         if logo:
             content = await logo.read()
             _validate_logo_file(logo, content)
-            
+
             from io import BytesIO
             logo_file = BytesIO(content)
             logo_filename = logo.filename
             logo_content_type = logo.content_type
-        
+
         # Crear o actualizar settings
         result = settings_service.create_or_update_settings(
             db=db,
@@ -168,12 +170,12 @@ async def save_company_settings(
             logo_content_type=logo_content_type,
             tenant_token=current_tenant.token if current_tenant else None
         )
-        
+
         return result
-        
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -190,10 +192,10 @@ def delete_company_logo(
         current_settings = settings_service.get_company_settings(db)
         if not current_settings:
             raise HTTPException(status_code=404, detail="Settings not found")
-        
+
         success = settings_service.delete_logo(
-            db, 
-            current_settings.id, 
+            db,
+            current_settings.id,
             tenant_token=current_tenant.token if current_tenant else None
         )
         if not success:
@@ -213,7 +215,7 @@ def delete_company_settings(
     current_settings = settings_service.get_company_settings(db)
     if not current_settings:
         raise HTTPException(status_code=404, detail="Settings not found")
-        
+
     settings = settings_service.deactivate_settings(db, current_settings.id)
     if not settings:
         raise HTTPException(status_code=404, detail="Settings not found")

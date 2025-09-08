@@ -1,7 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from ...database import get_db
 from ...schemas.route import RouteCreate, RouteUpdate, RouteResponse
 from ...services.route_service import RouteService
 from ..dependencies import get_route_service
@@ -11,7 +10,8 @@ from ...models.user import User
 router = APIRouter(prefix="/routes", tags=["routes"])
 
 
-@router.post("/", response_model=RouteResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=RouteResponse,
+             status_code=status.HTTP_201_CREATED)
 def create_route(
     route: RouteCreate,
     db: Session = Depends(get_tenant_db),

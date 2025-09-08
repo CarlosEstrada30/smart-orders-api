@@ -1,7 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from ...database import get_db
 from ...schemas.client import ClientCreate, ClientUpdate, ClientResponse
 from ...services.client_service import ClientService
 from ..dependencies import get_client_service
@@ -11,7 +10,8 @@ from ...models.user import User
 router = APIRouter(prefix="/clients", tags=["clients"])
 
 
-@router.post("/", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ClientResponse,
+             status_code=status.HTTP_201_CREATED)
 def create_client(
     client: ClientCreate,
     db: Session = Depends(get_tenant_db),
@@ -108,4 +108,4 @@ def reactivate_client(
     client = client_service.reactivate_client(db, client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    return client 
+    return client

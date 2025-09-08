@@ -14,34 +14,42 @@ class AuthService:
         self.algorithm = settings.ALGORITHM
         self.access_token_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
-    def create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    def create_access_token(
+            self,
+            data: dict,
+            expires_delta: Optional[timedelta] = None) -> str:
         """Create a JWT access token"""
         to_encode = data.copy()
         if expires_delta:
             expire = datetime.utcnow() + expires_delta
         else:
             expire = datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
-        
+
         to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
+        encoded_jwt = jwt.encode(
+            to_encode,
+            self.secret_key,
+            algorithm=self.algorithm)
         return encoded_jwt
 
     def verify_token(self, token: str) -> Optional[TokenData]:
         """Verify and decode a JWT token"""
         try:
-            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            payload = jwt.decode(
+                token, self.secret_key, algorithms=[
+                    self.algorithm])
             email: str = payload.get("sub")
             if email is None:
                 return None
-            
+
             # Extraer información del tenant del token (estructura anidada)
             tenant_info = payload.get("tenant", {})
             tenant_id = tenant_info.get("tenant_id")
             tenant_schema = tenant_info.get("tenant_schema")
-            
+
             token_data = TokenData(
-                email=email, 
-                tenant_id=tenant_id, 
+                email=email,
+                tenant_id=tenant_id,
                 tenant_schema=tenant_schema
             )
             return token_data
@@ -58,4 +66,4 @@ class AuthService:
         if token_data is None:
             return None
         user = self.user_service.get_user_by_email(db, email=token_data.email)
-        return user 
+        return user

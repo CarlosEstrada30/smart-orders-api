@@ -9,7 +9,7 @@ class UserRole(str, enum.Enum):
     EMPLOYEE = "EMPLOYEE"     # Empleado básico (almacén/producción)
     SALES = "SALES"          # Vendedor
     DRIVER = "DRIVER"        # Repartidor/Conductor
-    SUPERVISOR = "SUPERVISOR" # Supervisor  
+    SUPERVISOR = "SUPERVISOR"  # Supervisor
     MANAGER = "MANAGER"       # Gerente/Dueño
     ADMIN = "ADMIN"          # Administrador sistema
 
@@ -29,4 +29,4 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
-    inventory_entries = relationship("InventoryEntry", back_populates="user") 
+    inventory_entries = relationship("InventoryEntry", back_populates="user")

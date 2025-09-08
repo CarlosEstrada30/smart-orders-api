@@ -1,7 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from ...database import get_db
 from ...schemas.user import UserCreate, UserUpdate, UserResponse
 from ...services.user_service import UserService
 from ..dependencies import get_user_service
@@ -12,7 +11,8 @@ from ...utils.permissions import can_manage_users
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=UserResponse,
+             status_code=status.HTTP_201_CREATED)
 def create_user(
     user: UserCreate,
     db: Session = Depends(get_tenant_db),
@@ -23,10 +23,10 @@ def create_user(
     # Verificar permisos de administrador
     if not can_manage_users(current_user):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para crear usuarios. Se requiere rol de Administrador."
         )
-    
+
     try:
         return user_service.create_user(db, user)
     except ValueError as e:
@@ -45,10 +45,10 @@ def get_users(
     # Verificar permisos de administrador
     if not can_manage_users(current_user):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para ver usuarios. Se requiere rol de Administrador."
         )
-    
+
     return user_service.get_users(db, skip=skip, limit=limit)
 
 
@@ -60,13 +60,14 @@ def get_user(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get a specific user by ID (admin or own profile)"""
-    # Los usuarios pueden ver su propio perfil, los admins pueden ver cualquiera
+    # Los usuarios pueden ver su propio perfil, los admins pueden ver
+    # cualquiera
     if user_id != current_user.id and not can_manage_users(current_user):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para ver este usuario."
         )
-    
+
     user = user_service.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -84,25 +85,32 @@ def update_user(
     """Update a user (admin can edit all, users can edit their own basic info)"""
     is_admin = can_manage_users(current_user)
     is_own_profile = user_id == current_user.id
-    
+
     # Solo admins o el propio usuario pueden actualizar
     if not is_admin and not is_own_profile:
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para editar este usuario."
         )
-    
-    # Si no es admin y está editando su propio perfil, restringir ciertos campos
+
+    # Si no es admin y está editando su propio perfil, restringir ciertos
+    # campos
     if not is_admin and is_own_profile:
-        # Los usuarios no pueden cambiar su rol, estado activo o permisos de superuser
+        # Los usuarios no pueden cambiar su rol, estado activo o permisos de
+        # superuser
         restricted_fields = ['role', 'is_active', 'is_superuser']
         for field in restricted_fields:
-            if hasattr(user_update, field) and getattr(user_update, field) is not None:
+            if hasattr(
+                    user_update,
+                    field) and getattr(
+                    user_update,
+                    field) is not None:
                 raise HTTPException(
-                    status_code=403, 
-                    detail=f"No tienes permisos para cambiar '{field}'. Solo los administradores pueden modificar roles y permisos."
+                    status_code=403,
+                    detail=(f"No tienes permisos para cambiar '{field}'. "
+                            "Solo los administradores pueden modificar roles y permisos.")
                 )
-    
+
     user = user_service.update_user(db, user_id, user_update)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -120,17 +128,17 @@ def delete_user(
     # Solo administradores pueden eliminar usuarios
     if not can_manage_users(current_user):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para eliminar usuarios. Se requiere rol de Administrador."
         )
-    
+
     # Prevenir auto-eliminación
     if user_id == current_user.id:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="No puedes eliminar tu propia cuenta."
         )
-    
+
     user = user_service.delete_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -149,23 +157,23 @@ def assign_user_role(
     # Solo administradores pueden asignar roles
     if not can_manage_users(current_user):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para asignar roles. Se requiere rol de Administrador."
         )
-    
+
     # Obtener el usuario a actualizar
     target_user = user_service.get_user(db, user_id)
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Crear objeto de actualización solo con el rol
     user_update = UserUpdate(role=new_role)
-    
+
     # Actualizar el usuario
     updated_user = user_service.update_user(db, user_id, user_update)
     if not updated_user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     return updated_user
 
 
@@ -177,10 +185,10 @@ def get_available_roles(
     # Solo administradores pueden ver la lista de roles disponibles
     if not can_manage_users(current_user):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para ver roles disponibles. Se requiere rol de Administrador."
         )
-    
+
     return {
         "available_roles": [
             {
@@ -203,4 +211,4 @@ def get_role_description(role: UserRole) -> str:
         UserRole.MANAGER: "Gerente (reportes y gestión)",
         UserRole.ADMIN: "Administrador (gestión completa del sistema)"
     }
-    return descriptions.get(role, "Rol sin descripción") 
+    return descriptions.get(role, "Rol sin descripción")

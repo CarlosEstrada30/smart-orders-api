@@ -16,4 +16,4 @@ class TokenData(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
-    subdominio: Optional[str] = None 
+    subdominio: Optional[str] = None

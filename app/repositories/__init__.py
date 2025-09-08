@@ -9,11 +9,11 @@ from .settings_repository import SettingsRepository
 
 __all__ = [
     "BaseRepository",
-    "UserRepository", 
+    "UserRepository",
     "ClientRepository",
     "ProductRepository",
     "OrderRepository",
     "RouteRepository",
     "TenantRepository",
     "SettingsRepository"
-] 
+]

@@ -23,17 +23,18 @@ class SettingsService:
         if self._s3_client is None:
             if not all([
                 settings.R2_ACCOUNT_ID,
-                settings.R2_ACCESS_KEY_ID, 
+                settings.R2_ACCESS_KEY_ID,
                 settings.R2_SECRET_ACCESS_KEY,
                 settings.R2_BUCKET_NAME
             ]):
-                raise ValueError("Cloudflare R2 configuration is incomplete. Check environment variables.")
-            
+                raise ValueError(
+                    "Cloudflare R2 configuration is incomplete. Check environment variables.")
+
             # Construir endpoint URL si no se proporciona
             endpoint_url = settings.R2_ENDPOINT_URL
             if not endpoint_url:
                 endpoint_url = f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-            
+
             self._s3_client = boto3.client(
                 's3',
                 endpoint_url=endpoint_url,
@@ -41,46 +42,64 @@ class SettingsService:
                 aws_secret_access_key=settings.R2_SECRET_ACCESS_KEY,
                 region_name='auto'  # Cloudflare R2 usa 'auto' como región
             )
-        
+
         return self._s3_client
 
     def get_company_settings(self, db: Session) -> Optional[Settings]:
         """Obtiene la configuración única de la empresa"""
         return self.repository.get_company_settings(db)
 
-    def get_settings_by_id(self, db: Session, settings_id: int) -> Optional[Settings]:
+    def get_settings_by_id(
+            self,
+            db: Session,
+            settings_id: int) -> Optional[Settings]:
         """Obtiene configuración por ID"""
         return self.repository.get(db, settings_id)
 
-    def create_settings(self, db: Session, settings: SettingsCreate) -> Settings:
+    def create_settings(
+            self,
+            db: Session,
+            settings: SettingsCreate) -> Settings:
         """Crea nueva configuración de empresa"""
         # Verificar que no exista ya una configuración activa
         existing = self.repository.get_company_settings(db)
         if existing:
-            raise ValueError("Company settings already exist. Use update instead.")
-        
+            raise ValueError(
+                "Company settings already exist. Use update instead.")
+
         return self.repository.create(db, obj_in=settings)
 
-    def update_settings(self, db: Session, settings_id: int, settings_update: SettingsUpdate) -> Optional[Settings]:
+    def update_settings(
+            self,
+            db: Session,
+            settings_id: int,
+            settings_update: SettingsUpdate) -> Optional[Settings]:
         """Actualiza configuración de empresa"""
         db_settings = self.repository.get(db, settings_id)
         if not db_settings:
             return None
-        
-        update_data = settings_update.model_dump(exclude_unset=True)
-        return self.repository.update(db, db_obj=db_settings, obj_in=update_data)
 
-    def upload_logo(self, db: Session, settings_id: int, file: BinaryIO, filename: str, content_type: str) -> Optional[str]:
+        update_data = settings_update.model_dump(exclude_unset=True)
+        return self.repository.update(
+            db, db_obj=db_settings, obj_in=update_data)
+
+    def upload_logo(
+            self,
+            db: Session,
+            settings_id: int,
+            file: BinaryIO,
+            filename: str,
+            content_type: str) -> Optional[str]:
         """
         Sube un logo a Cloudflare R2 y actualiza la URL en la configuración
-        
+
         Args:
             db: Sesión de base de datos
             settings_id: ID de la configuración
             file: Archivo binario del logo
             filename: Nombre original del archivo
             content_type: Tipo de contenido (image/png, image/jpeg, etc.)
-            
+
         Returns:
             URL del logo subido o None si hubo error
         """
@@ -109,15 +128,18 @@ class SettingsService:
             logo_url = f"https://pub-{settings.R2_ACCOUNT_ID}.r2.dev/{unique_filename}"
 
             # Actualizar la configuración con la nueva URL
-            updated_settings = self.repository.update_logo_url(db, settings_id=settings_id, logo_url=logo_url)
-            
+            updated_settings = self.repository.update_logo_url(
+                db, settings_id=settings_id, logo_url=logo_url)
+
             if updated_settings:
                 return logo_url
             else:
-                # Si falló la actualización, intentar eliminar el archivo subido
+                # Si falló la actualización, intentar eliminar el archivo
+                # subido
                 try:
-                    self.s3_client.delete_object(Bucket=settings.R2_BUCKET_NAME, Key=unique_filename)
-                except:
+                    self.s3_client.delete_object(
+                        Bucket=settings.R2_BUCKET_NAME, Key=unique_filename)
+                except BaseException:
                     pass  # Ignorar errores de limpieza
                 return None
 
@@ -126,7 +148,8 @@ class SettingsService:
         except Exception as e:
             raise ValueError(f"Unexpected error uploading logo: {str(e)}")
 
-    def delete_logo(self, db: Session, settings_id: int, tenant_token: Optional[str] = None) -> bool:
+    def delete_logo(self, db: Session, settings_id: int,
+                    tenant_token: Optional[str] = None) -> bool:
         """
         Elimina el logo actual y limpia la URL de la configuración
         """
@@ -138,12 +161,14 @@ class SettingsService:
             # Extraer la clave del archivo desde la URL
             if "r2.dev/" in db_settings.logo_url:
                 file_key = db_settings.logo_url.split("r2.dev/")[1]
-                
+
                 # Eliminar archivo de R2
-                self.s3_client.delete_object(Bucket=settings.R2_BUCKET_NAME, Key=file_key)
+                self.s3_client.delete_object(
+                    Bucket=settings.R2_BUCKET_NAME, Key=file_key)
 
             # Limpiar URL de la base de datos
-            self.repository.update_logo_url(db, settings_id=settings_id, logo_url=None)
+            self.repository.update_logo_url(
+                db, settings_id=settings_id, logo_url=None)
             return True
 
         except (ClientError, NoCredentialsError) as e:
@@ -152,11 +177,11 @@ class SettingsService:
             raise ValueError(f"Unexpected error deleting logo: {str(e)}")
 
     def create_or_update_settings(
-        self, 
-        db: Session, 
-        settings_data: dict, 
-        logo_file: Optional[BinaryIO] = None, 
-        logo_filename: Optional[str] = None, 
+        self,
+        db: Session,
+        settings_data: dict,
+        logo_file: Optional[BinaryIO] = None,
+        logo_filename: Optional[str] = None,
         logo_content_type: Optional[str] = None,
         tenant_token: Optional[str] = None
     ) -> Settings:
@@ -167,40 +192,49 @@ class SettingsService:
         try:
             # Buscar si ya existe una configuración activa
             existing_settings = self.repository.get_company_settings(db)
-            
+
             if existing_settings:
                 # Actualizar configuración existente
-                updated_settings = self.repository.update(db, db_obj=existing_settings, obj_in=settings_data)
+                updated_settings = self.repository.update(
+                    db, db_obj=existing_settings, obj_in=settings_data)
             else:
                 # Crear nueva configuración
                 from ..schemas.settings import SettingsCreate
                 settings_create = SettingsCreate(**settings_data)
-                updated_settings = self.repository.create(db, obj_in=settings_create)
-            
+                updated_settings = self.repository.create(
+                    db, obj_in=settings_create)
+
             # Si se proporcionó un logo, subirlo
             if logo_file and logo_filename and logo_content_type:
                 logo_url = self._upload_logo_file(
-                    db, 
-                    updated_settings.id, 
-                    logo_file, 
-                    logo_filename, 
+                    db,
+                    updated_settings.id,
+                    logo_file,
+                    logo_filename,
                     logo_content_type,
                     tenant_token
                 )
                 if logo_url:
                     # Actualizar con la URL del logo
                     updated_settings = self.repository.update_logo_url(
-                        db, 
-                        settings_id=updated_settings.id, 
+                        db,
+                        settings_id=updated_settings.id,
                         logo_url=logo_url
                     )
-            
+
             return updated_settings
-            
+
         except Exception as e:
             raise ValueError(f"Failed to create or update settings: {str(e)}")
 
-    def _upload_logo_file(self, db: Session, settings_id: int, file: BinaryIO, filename: str, content_type: str, tenant_token: Optional[str] = None) -> Optional[str]:
+    def _upload_logo_file(
+            self,
+            db: Session,
+            settings_id: int,
+            file: BinaryIO,
+            filename: str,
+            content_type: str,
+            tenant_token: Optional[str] = None) -> Optional[str]:
         """
         Método privado para subir logo con estructura de directorios por tenant
         """
@@ -211,8 +245,9 @@ class SettingsService:
                 try:
                     if "r2.dev/" in db_settings.logo_url:
                         file_key = db_settings.logo_url.split("r2.dev/")[1]
-                        self.s3_client.delete_object(Bucket=settings.R2_BUCKET_NAME, Key=file_key)
-                except:
+                        self.s3_client.delete_object(
+                            Bucket=settings.R2_BUCKET_NAME, Key=file_key)
+                except BaseException:
                     pass  # Ignorar errores al eliminar logo anterior
 
             # Generar estructura de directorios con tenant_token
@@ -244,10 +279,15 @@ class SettingsService:
         except Exception as e:
             raise ValueError(f"Unexpected error uploading logo: {str(e)}")
 
-    def deactivate_settings(self, db: Session, settings_id: int) -> Optional[Settings]:
+    def deactivate_settings(
+            self,
+            db: Session,
+            settings_id: int) -> Optional[Settings]:
         """Desactiva configuración (soft delete)"""
         db_settings = self.repository.get(db, settings_id)
         if not db_settings:
             return None
-        
-        return self.repository.update(db, db_obj=db_settings, obj_in={"is_active": False})
+
+        return self.repository.update(
+            db, db_obj=db_settings, obj_in={
+                "is_active": False})

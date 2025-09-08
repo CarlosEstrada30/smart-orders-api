@@ -18,4 +18,4 @@ class Client(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
-    orders = relationship("Order", back_populates="client") 
+    orders = relationship("Order", back_populates="client")

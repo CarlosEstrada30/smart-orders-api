@@ -30,8 +30,15 @@ class Order(Base):
     # Relationships
     client = relationship("Client", back_populates="orders")
     route = relationship("Route", back_populates="orders")
-    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
-    invoice = relationship("Invoice", back_populates="order", uselist=False, cascade="all, delete-orphan")
+    items = relationship(
+        "OrderItem",
+        back_populates="order",
+        cascade="all, delete-orphan")
+    invoice = relationship(
+        "Invoice",
+        back_populates="order",
+        uselist=False,
+        cascade="all, delete-orphan")
 
 
 class OrderItem(Base):
@@ -46,4 +53,4 @@ class OrderItem(Base):
 
     # Relationships
     order = relationship("Order", back_populates="items")
-    product = relationship("Product") 
+    product = relationship("Product")

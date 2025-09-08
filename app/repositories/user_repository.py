@@ -19,4 +19,4 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         return user.is_active
 
     def is_superuser(self, user: User) -> bool:
-        return user.is_superuser 
+        return user.is_superuser

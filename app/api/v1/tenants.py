@@ -12,7 +12,8 @@ from ...utils.permissions import can_manage_users
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
 
-@router.post("/", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=TenantResponse,
+             status_code=status.HTTP_201_CREATED)
 def create_tenant(
     tenant: TenantCreate,
     db: Session = Depends(get_db),
@@ -21,22 +22,22 @@ def create_tenant(
 ):
     """
     Crear un nuevo tenant con su schema y migraciones
-    
+
     Este endpoint:
     1. Crea el registro del tenant en el schema public
     2. Crea un nuevo schema de base de datos con el nombre generado
     3. Ejecuta las migraciones en el nuevo schema
     4. Crea un superusuario por defecto: admin@{subdominio}.com con password admin{subdominio}123
-    
+
     Requiere permisos de administrador.
     """
     # Solo administradores pueden crear tenants
     if not can_manage_users(current_user):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para crear tenants. Se requiere rol de Administrador."
         )
-    
+
     try:
         db_tenant = tenant_service.create_tenant(db, tenant)
         # El campo schema se incluye automáticamente en la respuesta
@@ -45,7 +46,7 @@ def create_tenant(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Error interno al crear tenant: {str(e)}"
         )
 
@@ -60,16 +61,16 @@ def get_tenants(
 ):
     """
     Obtener lista de todos los tenants
-    
+
     Requiere permisos de administrador.
     """
     # Solo administradores pueden ver la lista de tenants
     if not can_manage_users(current_user):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para ver tenants. Se requiere rol de Administrador."
         )
-    
+
     tenants = tenant_service.get_tenants(db, skip=skip, limit=limit)
     return [TenantResponse.model_validate(tenant) for tenant in tenants]
 
@@ -83,20 +84,20 @@ def get_tenant(
 ):
     """
     Obtener un tenant específico por ID
-    
+
     Requiere permisos de administrador.
     """
     # Solo administradores pueden ver tenants específicos
     if not can_manage_users(current_user):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para ver este tenant. Se requiere rol de Administrador."
         )
-    
+
     tenant = tenant_service.get_tenant(db, tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant no encontrado")
-    
+
     return TenantResponse.model_validate(tenant)
 
 
@@ -109,20 +110,20 @@ def get_tenant_by_token(
 ):
     """
     Obtener un tenant por su token
-    
+
     Requiere permisos de administrador.
     """
     # Solo administradores pueden buscar tenants por token
     if not can_manage_users(current_user):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para buscar tenants. Se requiere rol de Administrador."
         )
-    
+
     tenant = tenant_service.get_tenant_by_token(db, token)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant no encontrado")
-    
+
     return TenantResponse.model_validate(tenant)
 
 
@@ -135,20 +136,20 @@ def get_tenant_by_subdominio(
 ):
     """
     Obtener un tenant por su subdominio
-    
+
     Requiere permisos de administrador.
     """
     # Solo administradores pueden buscar tenants por subdominio
     if not can_manage_users(current_user):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para buscar tenants. Se requiere rol de Administrador."
         )
-    
+
     tenant = tenant_service.get_tenant_by_subdominio(db, subdominio)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant no encontrado")
-    
+
     return TenantResponse.model_validate(tenant)
 
 
@@ -162,22 +163,22 @@ def update_tenant(
 ):
     """
     Actualizar un tenant
-    
+
     Requiere permisos de administrador.
     NOTA: Cambiar el token o nombre no actualizará automáticamente el nombre del schema.
     """
     # Solo administradores pueden actualizar tenants
     if not can_manage_users(current_user):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para actualizar tenants. Se requiere rol de Administrador."
         )
-    
+
     try:
         tenant = tenant_service.update_tenant(db, tenant_id, tenant_update)
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant no encontrado")
-        
+
         return TenantResponse.model_validate(tenant)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -192,21 +193,21 @@ def delete_tenant(
 ):
     """
     Eliminar un tenant
-    
+
     ADVERTENCIA: Esta operación es irreversible y eliminará el registro del tenant.
     El schema de base de datos asociado NO se eliminará automáticamente por seguridad.
-    
+
     Requiere permisos de administrador.
     """
     # Solo administradores pueden eliminar tenants
     if not can_manage_users(current_user):
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail="No tienes permisos para eliminar tenants. Se requiere rol de Administrador."
         )
-    
+
     tenant = tenant_service.delete_tenant(db, tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant no encontrado")
-    
+
     return None
