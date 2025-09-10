@@ -161,8 +161,8 @@ log "🚀 Iniciando servidor FastAPI..."
 # Configurar variables para producción
 export PYTHONPATH="${PYTHONPATH}:."
 
-# Obtener puerto desde variable de entorno de Render o usar 8000 por defecto
-PORT=${PORT:-8000}
+# Obtener puerto desde variable de entorno de Render o usar 1000 por defecto
+PORT=${PORT:-1000}
 
 success "🎉 Iniciando aplicación en puerto $PORT"
 
