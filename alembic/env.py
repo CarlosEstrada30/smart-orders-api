@@ -8,8 +8,18 @@ import sys
 # Agregar el directorio raíz al path para importar los modelos
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
+from app.models import (
+    User, UserRole,
+    Client,
+    Product,
+    Order, OrderItem,
+    Route,
+    Invoice, InvoiceStatus, PaymentMethod,
+    InventoryEntry, InventoryEntryItem, EntryType, EntryStatus,
+    Tenant,
+    Settings
+)
 from app.database import Base
-from app.models import User, Client, Product, Order, OrderItem, Route, Tenant
 from app.config import settings
 
 # this is the Alembic Config object, which provides
