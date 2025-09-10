@@ -1,0 +1,75 @@
+services:
+  - type: web
+    name: smart-orders-api
+    env: python
+    plan: starter  # Plan siempre activo - $7/mes aprox
+    region: oregon  # Cambia según tu ubicación preferida
+    buildCommand: |
+      # Instalar dependencias del sistema
+      apt-get update && apt-get install -y postgresql-client
+      
+      # Instalar pipenv
+      pip install --upgrade pip pipenv
+      
+      # Nota: pipenv install se ejecuta automáticamente en entrypoint.sh
+    
+    startCommand: ./entrypoint.sh
+    
+    # Variables de entorno
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.8
+      - key: PIPENV_VENV_IN_PROJECT
+        value: 1
+      - key: PIPENV_SKIP_LOCK
+        value: 0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smart-orders-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 30
+      - key: ENVIRONMENT
+        value: production
+    
+    # Health check
+    healthCheckPath: /health
+    
+    # Configuración de auto-deploy
+    autoDeploy: true
+    
+    # Configuración de recursos
+    # Para plan starter: 0.5 CPU, 512 MB RAM (siempre activo)
+    # Para plan standard: 1 CPU, 2 GB RAM
+    # Para plan pro: 2 CPU, 4 GB RAM
+
+  # Base de datos PostgreSQL
+  - type: pgsql
+    name: smart-orders-db
+    plan: starter  # Plan con mejor rendimiento y almacenamiento
+    region: oregon  # Debe coincidir con el servicio web
+    databaseName: smart_orders_db
+    databaseUser: postgres
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: everywhere
+
+# Configuraciones adicionales
+buildFilters:
+  - paths:
+    - "app/**"
+    - "alembic/**"
+    - "scripts/**"
+    - "Pipfile*"
+    - "entrypoint.sh"
+    - "render.yaml"
+  - ignoredPaths:
+    - "**/__pycache__/**"
+    - "**/.git/**"
+    - "**/node_modules/**"
+    - "**/.pytest_cache/**"
+    - "**/test*/**"

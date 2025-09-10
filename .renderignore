@@ -1,0 +1,53 @@
+# .renderignore - Archivos a ignorar durante el despliegue en Render
+
+# Archivos de desarrollo
+.env*
+.vscode/
+.idea/
+*.log
+
+# Testing
+test*/
+*test*
+pytest.ini
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Documentation
+*.md
+!README.md  # Mantener README para documentación del proyecto
+
+# Cache y temporales
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+Thumbs.db
+
+# Virtual environments (pipenv maneja esto)
+venv/
+env/
+.venv/
+
+# Dependency files que no necesitamos (usamos Pipfile)
+requirements*.txt
+
+# Scripts de desarrollo local
+scripts/test_*.py
+scripts/*local*.py
+
+# Archivos de backup
+*.bak
+*.tmp
+*.swp
+
+# Logs y receipts generados
+receipts/*.pdf
+invoices/pdfs/*.pdf
+invoices/fel_xml/*.xml
+
+# Git
+.git/
+.gitignore
+

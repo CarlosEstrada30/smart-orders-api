@@ -1,3 +1,6 @@
+# Dependency management
+requirements.txt  # Usamos Pipfile con pipenv en su lugar
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
