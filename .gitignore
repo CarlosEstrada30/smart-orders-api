@@ -151,6 +151,3 @@ Thumbs.db
 alembic/versions/
 *.db
 *.sqlite
-
-# Pipenv specific
-Pipfile.lock 

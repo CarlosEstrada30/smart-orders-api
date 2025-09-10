@@ -95,8 +95,9 @@ import sys, os
 sys.path.append('.')
 try:
     from app.database import engine
+    from sqlalchemy import text
     with engine.connect() as connection:
-        connection.execute('SELECT 1')
+        connection.execute(text('SELECT 1'))
     print('✅ Base de datos disponible')
     sys.exit(0)
 except Exception as e:
