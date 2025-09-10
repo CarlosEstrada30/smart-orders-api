@@ -148,6 +148,5 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-alembic/versions/
 *.db
 *.sqlite
