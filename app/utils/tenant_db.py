@@ -18,8 +18,15 @@ def get_engine_for_schema(schema_name: str):
     """
     Crea un engine de SQLAlchemy configurado para un schema específico
     """
+    # Agregar comillas dobles si el schema tiene caracteres especiales
+    # y encodificar correctamente para URL (%22 en lugar de ")
+    if any(c in schema_name for c in ['-', ' ', '.', '+']):
+        quoted_schema = f'%22{schema_name}%22'
+    else:
+        quoted_schema = schema_name
+    
     # Crear URL con search_path específico para el schema
-    db_url = f"{settings.DATABASE_URL}?options=-csearch_path%3D{schema_name}"
+    db_url = f"{settings.DATABASE_URL}?options=-csearch_path%3D{quoted_schema}"
     return create_engine(db_url)
 
 
@@ -89,7 +96,7 @@ def run_migrations_for_schema(schema_name: str) -> bool:
 
         # Crear la tabla alembic_version para tracking de migraciones
         with engine_for_schema.connect() as connection:
-            # Cambiar al schema específico
+            # Cambiar al schema específico (usar comillas dobles siempre para mayor seguridad)
             connection.execute(
                 text(f'SET search_path TO "{schema_name}", public'))
 
