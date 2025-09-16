@@ -306,20 +306,19 @@ class OrdersReportGenerator:
         table_data = [headers]
 
         for order in orders:
-            # Crear resumen compacto de productos
+            # Crear resumen completo de productos (sin truncar y mostrar todos)
             products_summary = []
             for item in order.items:
-                product_name = item.product.name if len(
-                    item.product.name) <= 20 else item.product.name[:17] + "..."
-                products_summary.append(f"{item.quantity}x {product_name}")
+                # No truncar nombres de productos - mostrar nombre completo
+                product_name = item.product.name
+                # Formato más claro: cantidad, unidad si existe, y nombre
+                if hasattr(item.product, 'unit') and item.product.unit:
+                    products_summary.append(f"• {item.quantity} {item.product.unit} - {product_name}")
+                else:
+                    products_summary.append(f"• {item.quantity}x {product_name}")
 
-            # Limitar productos mostrados para mantener el diseño compacto
-            if len(products_summary) > 3:
-                shown_products = products_summary[:3]
-                shown_products.append(f"... y {len(products_summary) - 3} más")
-                products_text = "\n".join(shown_products)
-            else:
-                products_text = "\n".join(products_summary)
+            # Mostrar TODOS los productos - no limitar para el personal de ruta
+            products_text = "\n".join(products_summary)
 
             # Formatear estado
             status_text = {
@@ -340,8 +339,8 @@ class OrdersReportGenerator:
             ]
             table_data.append(row)
 
-        # Crear tabla de órdenes
-        col_widths = [3.2 * cm, 2.2 * cm, 2.2 * cm, 6.5 * cm, 2.5 * cm]
+        # Crear tabla de órdenes (expandir columna de productos para mostrar todo)
+        col_widths = [2.8 * cm, 2.0 * cm, 2.0 * cm, 8.2 * cm, 2.0 * cm]
         orders_table = Table(table_data, colWidths=col_widths)
 
         table_style = [
