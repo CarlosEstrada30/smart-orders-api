@@ -310,3 +310,125 @@ class OrderService:
                 for item in order.items
             ]
         }
+
+    def get_monthly_analytics_by_status(
+        self,
+        db: Session,
+        status: OrderStatus,
+        year: Optional[int] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> dict:
+        """Get monthly analytics summary for orders with specific status"""
+        from ..schemas.order import OrderAnalyticsSummary, MonthlySummary
+        
+        # Get monthly data from repository
+        monthly_data_raw = self.order_repository.get_monthly_summary_by_status(
+            db,
+            status=status,
+            year=year,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        # Convert to proper schema format
+        month_names = {
+            1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+            5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
+            9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+        }
+        
+        monthly_summaries = []
+        total_orders = 0
+        total_amount = 0.0
+        
+        for data in monthly_data_raw:
+            monthly_summary = MonthlySummary(
+                year=data['year'],
+                month=data['month'],
+                month_name=month_names[data['month']],
+                order_count=data['order_count'],
+                total_amount=data['total_amount']
+            )
+            monthly_summaries.append(monthly_summary)
+            total_orders += data['order_count']
+            total_amount += data['total_amount']
+        
+        # Create summary response
+        period_start = None
+        period_end = None
+        
+        if start_date:
+            period_start = start_date.strftime('%Y-%m-%d')
+        if end_date:
+            period_end = end_date.strftime('%Y-%m-%d')
+        
+        return OrderAnalyticsSummary(
+            monthly_data=monthly_summaries,
+            total_orders=total_orders,
+            total_amount=total_amount,
+            period_start=period_start,
+            period_end=period_end
+        )
+
+    def get_status_distribution_for_month(
+        self,
+        db: Session,
+        year: int,
+        month: int
+    ) -> dict:
+        """Get status distribution for donut chart for a specific month"""
+        from ..schemas.order import StatusDistributionSummary, StatusDistribution
+        
+        # Get raw data from repository
+        status_data_raw = self.order_repository.get_status_distribution_by_month(
+            db,
+            year=year,
+            month=month
+        )
+        
+        # Status name mapping for display
+        status_names = {
+            'pending': 'Pendiente',
+            'confirmed': 'Confirmado', 
+            'in_progress': 'En Proceso',
+            'shipped': 'Enviado',
+            'delivered': 'Entregado',
+            'cancelled': 'Cancelado'
+        }
+        
+        # Calculate total orders for percentage calculation
+        total_orders = sum(data['count'] for data in status_data_raw)
+        
+        # Convert to proper schema format with percentages
+        status_distributions = []
+        
+        for data in status_data_raw:
+            status = data['status']
+            count = data['count']
+            percentage = (count / total_orders * 100) if total_orders > 0 else 0.0
+            
+            status_dist = StatusDistribution(
+                status=status,
+                status_name=status_names.get(status, status.title()),
+                count=count,
+                percentage=round(percentage, 1)
+            )
+            status_distributions.append(status_dist)
+        
+        # Create month name
+        month_names = {
+            1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+            5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto", 
+            9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+        }
+        
+        period_name = f"{month_names.get(month, month)} {year}"
+        
+        return StatusDistributionSummary(
+            status_data=status_distributions,
+            total_orders=total_orders,
+            month=month,
+            year=year,
+            period_name=period_name
+        )

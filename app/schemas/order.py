@@ -57,3 +57,51 @@ class OrderResponse(OrderBase):
 
     class Config:
         from_attributes = True
+
+
+# Analytics Schemas
+class MonthlySummary(BaseModel):
+    """Schema for monthly orders summary"""
+    year: int
+    month: int
+    month_name: str
+    order_count: int
+    total_amount: float
+    
+    class Config:
+        from_attributes = True
+
+
+class OrderAnalyticsSummary(BaseModel):
+    """Schema for orders analytics summary response"""
+    monthly_data: List[MonthlySummary]
+    total_orders: int
+    total_amount: float
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class StatusDistribution(BaseModel):
+    """Schema for status distribution (donut chart data)"""
+    status: str
+    status_name: str
+    count: int
+    percentage: float
+    
+    class Config:
+        from_attributes = True
+
+
+class StatusDistributionSummary(BaseModel):
+    """Schema for status distribution summary response (donut chart)"""
+    status_data: List[StatusDistribution]
+    total_orders: int
+    month: int
+    year: int
+    period_name: str
+    
+    class Config:
+        from_attributes = True

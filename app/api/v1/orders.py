@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from io import BytesIO
-from ...schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate
+from ...schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate, OrderAnalyticsSummary, StatusDistributionSummary
 from ...schemas.pagination import PaginatedResponse
 from ...services.order_service import OrderService
 from ...services.compact_receipt_generator import CompactReceiptGenerator
@@ -651,3 +651,160 @@ def download_orders_report_pdf(
         raise HTTPException(
             status_code=500,
             detail=f"Error generating orders report: {str(e)}")
+
+
+# ===== ENDPOINTS DE ANALYTICS =====
+
+@router.get("/analytics/monthly-summary", response_model=OrderAnalyticsSummary)
+def get_monthly_orders_analytics(
+        status_filter: str = Query(
+            ...,
+            description="Filter by order status (required)"),
+        year: Optional[int] = Query(
+            None,
+            description="Filter by specific year"),
+        start_date: Optional[date] = Query(
+            None,
+            description="Start date for analysis (YYYY-MM-DD)"),
+        end_date: Optional[date] = Query(
+            None,
+            description="End date for analysis (YYYY-MM-DD)"),
+        db: Session = Depends(get_tenant_db),
+        order_service: OrderService = Depends(get_order_service),
+        current_user: User = Depends(get_current_active_user)):
+    """Get monthly summary analytics for orders by status
+    
+    Returns aggregated data showing order count and total amount by month.
+    Perfect for creating bar charts or line graphs showing monthly trends.
+    
+    Parameters:
+    - status_filter: Order status (pending, confirmed, in_progress, shipped, delivered, cancelled)
+    - year: Optional filter by specific year
+    - start_date: Optional start date for analysis period
+    - end_date: Optional end date for analysis period
+    
+    Response includes:
+    - monthly_data: List of monthly summaries with year, month, count, and total amount
+    - total_orders: Sum of all orders in the period
+    - total_amount: Sum of all amounts in the period
+    - period_start/end: Date range analyzed
+    """
+    try:
+        # Verify permissions
+        if not can_view_orders(current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="No tienes permisos para ver analíticos de pedidos."
+            )
+        
+        # Validate date range
+        if start_date and end_date and start_date > end_date:
+            raise HTTPException(
+                status_code=400,
+                detail="start_date cannot be later than end_date"
+            )
+        
+        # Parse and validate status
+        try:
+            status_enum = OrderStatus(status_filter)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status: {status_filter}. Valid values are: {', '.join([s.value for s in OrderStatus])}"
+            )
+        
+        # Get analytics data
+        analytics_data = order_service.get_monthly_analytics_by_status(
+            db,
+            status=status_enum,
+            year=year,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        return analytics_data
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting monthly analytics: {str(e)}")
+
+
+@router.get("/analytics/status-distribution", response_model=StatusDistributionSummary)
+def get_status_distribution(
+        year: Optional[int] = Query(
+            None,
+            description="Year for analysis (defaults to current year)"),
+        month: Optional[int] = Query(
+            None,
+            description="Month for analysis (1-12, defaults to current month)"),
+        db: Session = Depends(get_tenant_db),
+        order_service: OrderService = Depends(get_order_service),
+        current_user: User = Depends(get_current_active_user)):
+    """Get order status distribution for donut chart
+    
+    Returns the count and percentage of orders by status for a specific month.
+    Perfect for creating donut charts showing order status distribution.
+    
+    Parameters:
+    - year: Year for analysis (optional, defaults to current year)
+    - month: Month for analysis (1-12, optional, defaults to current month)
+    
+    Response includes:
+    - status_data: List with each status, its name, count, and percentage
+    - total_orders: Total orders in the period
+    - month/year: Period analyzed 
+    - period_name: Human-readable period name
+    
+    Example response for donut chart:
+    {
+      "status_data": [
+        {"status": "delivered", "status_name": "Entregado", "count": 15, "percentage": 50.0},
+        {"status": "pending", "status_name": "Pendiente", "count": 10, "percentage": 33.3},
+        {"status": "cancelled", "status_name": "Cancelado", "count": 5, "percentage": 16.7}
+      ],
+      "total_orders": 30,
+      "month": 9,
+      "year": 2025,
+      "period_name": "Septiembre 2025"
+    }
+    """
+    try:
+        # Verify permissions
+        if not can_view_orders(current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="No tienes permisos para ver analíticos de pedidos."
+            )
+        
+        # Use current month/year if not provided
+        from datetime import datetime
+        now = datetime.now()
+        
+        analysis_year = year if year is not None else now.year
+        analysis_month = month if month is not None else now.month
+        
+        # Validate month range
+        if analysis_month < 1 or analysis_month > 12:
+            raise HTTPException(
+                status_code=400,
+                detail="Month must be between 1 and 12"
+            )
+        
+        # Get status distribution data
+        distribution_data = order_service.get_status_distribution_for_month(
+            db,
+            year=analysis_year,
+            month=analysis_month
+        )
+        
+        return distribution_data
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting status distribution: {str(e)}")

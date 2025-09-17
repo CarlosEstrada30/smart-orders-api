@@ -260,3 +260,99 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             query = query.filter(and_(*filters))
 
         return query.count()
+
+    def get_monthly_summary_by_status(
+        self,
+        db: Session,
+        *,
+        status: OrderStatus,
+        year: Optional[int] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> List[dict]:
+        """Get monthly summary of orders by status with optional year/date range filters"""
+        from sqlalchemy import func, extract
+        
+        # Base query with aggregation
+        query = db.query(
+            extract('year', Order.created_at).label('year'),
+            extract('month', Order.created_at).label('month'),
+            func.count(Order.id).label('order_count'),
+            func.sum(Order.total_amount).label('total_amount')
+        )
+        
+        # Build filters
+        filters = []
+        
+        # Status filter (direct enum comparison)
+        filters.append(Order.status == status)
+        
+        # Year filter
+        if year is not None:
+            filters.append(extract('year', Order.created_at) == year)
+        
+        # Date range filters
+        if start_date is not None:
+            filters.append(
+                Order.created_at >= datetime.combine(start_date, datetime.min.time())
+            )
+        
+        if end_date is not None:
+            filters.append(
+                Order.created_at <= datetime.combine(end_date, datetime.max.time())
+            )
+        
+        # Apply filters
+        query = query.filter(and_(*filters))
+        
+        # Group by year and month, order by year and month
+        query = query.group_by(
+            extract('year', Order.created_at),
+            extract('month', Order.created_at)
+        ).order_by(
+            extract('year', Order.created_at),
+            extract('month', Order.created_at)
+        )
+        
+        return [
+            {
+                'year': int(row.year),
+                'month': int(row.month),
+                'order_count': int(row.order_count),
+                'total_amount': float(row.total_amount or 0)
+            }
+            for row in query.all()
+        ]
+
+    def get_status_distribution_by_month(
+        self,
+        db: Session,
+        *,
+        year: int,
+        month: int
+    ) -> List[dict]:
+        """Get count of orders by status for a specific month/year"""
+        from sqlalchemy import func, extract
+        
+        # Base query with aggregation by status
+        query = db.query(
+            Order.status.label('status'),
+            func.count(Order.id).label('count')
+        )
+        
+        # Filter by specific month and year
+        query = query.filter(
+            extract('year', Order.created_at) == year,
+            extract('month', Order.created_at) == month
+        )
+        
+        # Group by status
+        query = query.group_by(Order.status)
+        
+        return [
+            {
+                'status': str(row.status),
+                'count': int(row.count)
+            }
+            for row in query.all()
+        ]
