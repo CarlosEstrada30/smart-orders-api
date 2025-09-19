@@ -25,13 +25,16 @@ def get_tenant_service() -> TenantService:
 def get_tenant_db(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     auth_service: AuthService = Depends(get_auth_service)
-) -> Session:
+):
     """
     Extrae el tenant_schema del JWT y retorna la sesión de BD correspondiente.
 
     Funciona tanto para esquema 'public' como para tenants específicos.
     Esta es la función central para multi-tenancy.
+    
+    IMPORTANTE: Usa yield para que FastAPI cierre automáticamente la sesión.
     """
+    db = None
     try:
         # Verificar y decodificar el JWT
         token_data = auth_service.verify_token(credentials.credentials)
@@ -48,15 +51,41 @@ def get_tenant_db(
             # Fallback a public si no hay tenant_schema en el JWT
             tenant_schema = "public"
 
-        # Retornar sesión para el schema correspondiente
-        return get_session_for_schema(tenant_schema)
+        # Obtener sesión para el schema correspondiente
+        if tenant_schema == "public":
+            # Para el schema público, usar la sesión principal con reintentos
+            from ...database import get_db_with_retries
+            db = get_db_with_retries()
+        else:
+            # Para schemas de tenant específicos
+            db = get_session_for_schema(tenant_schema)
 
-    except Exception:
+        yield db
+
+    except HTTPException:
+        # Re-lanzar HTTPExceptions para que FastAPI las maneje correctamente
+        if db:
+            db.close()
+        raise
+    except Exception as e:
+        # Manejar otros errores
+        if db:
+            db.close()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    finally:
+        # Asegurar que la sesión se cierre
+        if db:
+            try:
+                db.close()
+            except Exception as e:
+                # Log el error pero no fallar
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Error closing tenant session: {e}")
 
 
 def get_current_user(

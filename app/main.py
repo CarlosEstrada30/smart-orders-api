@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from .database import engine
 from .models import Base
 from .api.v1 import users, clients, products, orders, routes, auth, invoices, inventory, tenants, settings
@@ -67,7 +68,7 @@ async def health_check():
     try:
         # Verificar conexión a base de datos
         with engine.connect() as connection:
-            connection.execute("SELECT 1")
+            connection.execute(text("SELECT 1"))
         
         return JSONResponse(
             status_code=200,

@@ -4,6 +4,7 @@ Utilidades para manejo de base de datos multitenant
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.pool import QueuePool
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 import os
@@ -12,6 +13,48 @@ from typing import Optional
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def get_engine_config_for_tenant():
+    """
+    Retorna la configuración del engine para conexiones de tenant usando settings
+    """
+    config = {
+        "pool_size": max(2, settings.DB_POOL_SIZE // 2),  # Pool más pequeño para tenants
+        "max_overflow": max(3, settings.DB_MAX_OVERFLOW // 2),
+        "pool_pre_ping": True,   # Verificar conexiones antes de usarlas
+        "pool_recycle": settings.DB_POOL_RECYCLE,
+        "pool_timeout": settings.DB_POOL_TIMEOUT,
+        "connect_args": {
+            "connect_timeout": settings.DB_CONNECT_TIMEOUT,
+            "application_name": "smart-orders-api-tenant"
+        }
+    }
+    
+    # Configuraciones específicas para producción (Render)
+    if settings.is_production:
+        config["connect_args"].update({
+            "sslmode": settings.DB_SSL_MODE if settings.DB_SSL_MODE != "prefer" else "require",
+        })
+        
+        # Agregar certificados SSL si están configurados
+        if settings.DB_SSL_CERT:
+            config["connect_args"]["sslcert"] = settings.DB_SSL_CERT
+        if settings.DB_SSL_KEY:
+            config["connect_args"]["sslkey"] = settings.DB_SSL_KEY
+        if settings.DB_SSL_ROOT_CERT:
+            config["connect_args"]["sslrootcert"] = settings.DB_SSL_ROOT_CERT
+            
+        # Pool aún más conservador para tenants en producción
+        config["pool_size"] = min(2, config["pool_size"])
+        config["max_overflow"] = min(3, config["max_overflow"])
+        config["pool_recycle"] = min(1800, settings.DB_POOL_RECYCLE)
+    else:
+        # Pool ultra conservador para desarrollo local con tenants
+        config["pool_size"] = 1  # Solo 1 conexión por schema en desarrollo
+        config["max_overflow"] = 2  # Máximo 2 overflow
+    
+    return config
 
 
 def get_engine_for_schema(schema_name: str):
@@ -26,17 +69,57 @@ def get_engine_for_schema(schema_name: str):
         quoted_schema = schema_name
     
     # Crear URL con search_path específico para el schema
-    db_url = f"{settings.DATABASE_URL}?options=-csearch_path%3D{quoted_schema}"
-    return create_engine(db_url)
+    base_url = settings.get_database_url()
+    # Determinar el separador correcto para parámetros adicionales
+    separator = "&" if "?" in base_url else "?"
+    db_url = f"{base_url}{separator}options=-csearch_path%3D{quoted_schema}"
+    
+    # Aplicar configuración específica para tenant
+    engine_config = get_engine_config_for_tenant()
+    
+    return create_engine(
+        db_url,
+        **engine_config,
+        poolclass=QueuePool,
+        echo=False
+    )
 
 
 def get_session_for_schema(schema_name: str):
     """
     Crea una sesión de SQLAlchemy para un schema específico
+    Con manejo de reintentos para mayor robustez
     """
-    engine = get_engine_for_schema(schema_name)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    return SessionLocal()
+    from sqlalchemy.exc import OperationalError, DisconnectionError
+    import time
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    max_retries = 3
+    retry_delay = 1  # segundos
+    
+    for attempt in range(max_retries):
+        try:
+            engine = get_engine_for_schema(schema_name)
+            SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+            session = SessionLocal()
+            
+            # Verificar que la conexión funciona
+            from sqlalchemy import text
+            session.execute(text("SELECT 1"))
+            return session
+            
+        except (OperationalError, DisconnectionError) as e:
+            if attempt == max_retries - 1:
+                logger.error(f"Error de conexión para schema '{schema_name}' después de {max_retries} intentos: {e}")
+                raise
+            logger.warning(f"Error de conexión para schema '{schema_name}' (intento {attempt + 1}/{max_retries}): {e}")
+            time.sleep(retry_delay)
+            retry_delay *= 2  # Backoff exponencial
+        except Exception as e:
+            logger.error(f"Error inesperado creando sesión para schema '{schema_name}': {e}")
+            raise
 
 
 def create_schema_if_not_exists(schema_name: str) -> bool:
