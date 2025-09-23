@@ -6,6 +6,7 @@ from .route import RouteCreate, RouteUpdate, RouteResponse
 from .tenant import TenantCreate, TenantUpdate, TenantResponse
 from .settings import SettingsCreate, SettingsUpdate, SettingsResponse, LogoUploadResponse, SettingsFormData
 from .pagination import PaginatedResponse, PaginationInfo
+from .bulk_upload import BulkUploadResult, BulkUploadError, ClientBulkUploadResult, ProductBulkUploadResult
 
 __all__ = [
     "UserCreate",
@@ -34,4 +35,8 @@ __all__ = [
     "LogoUploadResponse",
     "SettingsFormData",
     "PaginatedResponse",
-    "PaginationInfo"]
+    "PaginationInfo",
+    "BulkUploadResult",
+    "BulkUploadError", 
+    "ClientBulkUploadResult",
+    "ProductBulkUploadResult"]

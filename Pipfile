@@ -23,6 +23,8 @@ aiofiles = "*"
 reportlab = "==3.6.0"
 requests = "*"
 boto3 = "*"
+pandas = "*"
+openpyxl = "*"
 
 [dev-packages]
 pytest = "*"

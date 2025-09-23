@@ -1,8 +1,12 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+import io
 from ...schemas.product import ProductCreate, ProductUpdate, ProductResponse
+from ...schemas.bulk_upload import ProductBulkUploadResult
 from ...services.product_service import ProductService
+from ...utils.excel_utils import ExcelGenerator
 from ..dependencies import get_product_service
 from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
@@ -59,6 +63,61 @@ def get_low_stock_products(
 ):
     """Get products with low stock"""
     return product_service.get_low_stock_products(db, threshold=threshold)
+
+
+@router.get("/export")
+async def export_products(
+    active_only: bool = False,
+    skip: int = 0,
+    limit: int = 10000,
+    db: Session = Depends(get_tenant_db),
+    product_service: ProductService = Depends(get_product_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Export products to Excel file (requires authentication)
+    
+    Parameters:
+    - active_only: Export only active products (default: false)
+    - skip: Number of records to skip (default: 0)  
+    - limit: Maximum number of records to export (default: 10000)
+    
+    Returns an Excel file with the same format as the import template.
+    """
+    try:
+        # Get products data
+        if active_only:
+            products = product_service.get_active_products(db, skip=skip, limit=limit)
+        else:
+            products = product_service.get_products(db, skip=skip, limit=limit)
+        
+        # Convert to dict format for Excel generator
+        products_data = []
+        for product in products:
+            products_data.append({
+                'name': product.name,
+                'description': product.description,
+                'price': product.price,
+                'stock': product.stock,
+                'sku': product.sku,
+                'is_active': product.is_active
+            })
+        
+        # Generate Excel data
+        excel_data = ExcelGenerator.export_products_data(products_data)
+        
+        # Generate filename with timestamp
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"productos_export_{timestamp}.xlsx"
+        
+        return StreamingResponse(
+            io.BytesIO(excel_data),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error exporting products: {str(e)}")
 
 
 @router.get("/{product_id}", response_model=ProductResponse)
@@ -151,3 +210,56 @@ def update_stock(
         return product
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/bulk-upload", response_model=ProductBulkUploadResult)
+async def bulk_upload_products(
+    file: UploadFile = File(..., description="Excel file with product data"),
+    db: Session = Depends(get_tenant_db),
+    product_service: ProductService = Depends(get_product_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Bulk upload products from Excel file (requires authentication)
+    
+    The Excel file should preferably have a 'Productos' sheet, but any sheet will work.
+    Accepts column names in Spanish or English:
+    
+    REQUIRED COLUMNS (any of these names):
+    - nombre / name / Name / Nombre / NOMBRE: Product name
+    - precio / price / Price / Precio / PRECIO: Product price (must be > 0)
+    - sku / SKU / codigo / código / Codigo / Código: Product SKU (must be unique)
+    
+    OPTIONAL COLUMNS (any of these names):
+    - descripcion / description / Description / Descripción: Product description
+    - stock / Stock / inventario / Inventario: Stock quantity (default: 0)
+    - activo / is_active / active / Active: true/false for active status (default: true)
+    
+    Download the template using GET /api/v1/products/template/download for the correct format.
+    """
+    try:
+        result = await product_service.bulk_upload_products(db, file)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
+
+@router.get("/template/download")
+async def download_products_template(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Download Excel template for bulk product upload (requires authentication)
+    """
+    try:
+        excel_data = ExcelGenerator.create_products_template()
+        
+        return StreamingResponse(
+            io.BytesIO(excel_data),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=plantilla_productos.xlsx"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating template: {str(e)}")
