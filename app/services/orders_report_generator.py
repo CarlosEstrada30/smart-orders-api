@@ -88,12 +88,14 @@ class OrdersReportGenerator:
             fontName='Helvetica-Bold'
         ))
 
-        # Estilo para texto normal compacto
+        # Estilo para texto normal compacto con mejor espaciado para listas
         self.styles.add(ParagraphStyle(
             name='CompactText',
             parent=self.styles['Normal'],
             fontSize=8,
-            spaceAfter=1,
+            spaceAfter=2,
+            spaceBefore=1,
+            leading=10,  # Mejor espaciado entre líneas
             textColor=colors.Color(0.2, 0.2, 0.2),
             alignment=TA_LEFT,
             fontName='Helvetica'
@@ -306,19 +308,28 @@ class OrdersReportGenerator:
         table_data = [headers]
 
         for order in orders:
-            # Crear resumen completo de productos (sin truncar y mostrar todos)
+            # Crear resumen completo de productos con precios
             products_summary = []
             for item in order.items:
-                # No truncar nombres de productos - mostrar nombre completo
                 product_name = item.product.name
-                # Formato más claro: cantidad, unidad si existe, y nombre
+                quantity = item.quantity
+                unit_price = item.unit_price
+                subtotal = quantity * unit_price
+                
+                # Formato mejorado: cantidad, nombre, precio unitario y subtotal
                 if hasattr(item.product, 'unit') and item.product.unit:
-                    products_summary.append(f"• {item.quantity} {item.product.unit} - {product_name}")
+                    products_summary.append(
+                        f"• {quantity} {item.product.unit} - {product_name}<br/>"
+                        f"&nbsp;&nbsp;Q {unit_price:,.2f} c/u = Q {subtotal:,.2f}"
+                    )
                 else:
-                    products_summary.append(f"• {item.quantity}x {product_name}")
+                    products_summary.append(
+                        f"• {quantity}x {product_name}<br/>"
+                        f"&nbsp;&nbsp;Q {unit_price:,.2f} c/u = Q {subtotal:,.2f}"
+                    )
 
-            # Mostrar TODOS los productos - no limitar para el personal de ruta
-            products_text = "\n".join(products_summary)
+            # Mostrar TODOS los productos con formato mejorado
+            products_text = "<br/>".join(products_summary)
 
             # Formatear estado
             status_text = {
@@ -339,8 +350,8 @@ class OrdersReportGenerator:
             ]
             table_data.append(row)
 
-        # Crear tabla de órdenes (expandir columna de productos para mostrar todo)
-        col_widths = [2.8 * cm, 2.0 * cm, 2.0 * cm, 8.2 * cm, 2.0 * cm]
+        # Crear tabla de órdenes (expandir columna de productos para mostrar precios)
+        col_widths = [2.6 * cm, 1.8 * cm, 1.8 * cm, 9.0 * cm, 1.8 * cm]
         orders_table = Table(table_data, colWidths=col_widths)
 
         table_style = [
