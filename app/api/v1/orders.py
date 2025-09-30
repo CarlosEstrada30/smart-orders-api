@@ -19,6 +19,9 @@ from ...utils.permissions import can_create_orders, can_view_orders, can_update_
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 
+# No additional schemas needed - using existing ones
+
+
 @router.post("/", response_model=OrderResponse,
              status_code=status.HTTP_201_CREATED)
 def create_order(
@@ -164,21 +167,56 @@ def update_order(
     order_service: OrderService = Depends(get_order_service),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Update an order (requires authentication)"""
+    """
+    Update an order
+    
+    Behavior depends on order status:
+    - PENDING orders: Complete update allowed (client, items, route, notes)
+    - Other status: Only basic fields (route, notes, status)
+    """
     try:
-        # For now, only status updates are supported
-        if order_update.status is not None:
-            order = order_service.update_order_status(
-                db, order_id, order_update.status)
+        if not can_create_orders(current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="Insufficient permissions to edit orders")
+        
+        # Get current order to check status
+        current_order = order_service.get_order(db, order_id)
+        if not current_order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Check if this is a full update request (has items)
+        is_full_update = order_update.items is not None
+        
+        # If order is PENDING and we have full update data, allow complete editing
+        if current_order.status == OrderStatus.PENDING and is_full_update:
+            # Full update for PENDING orders
+            order = order_service.update_pending_order(db, order_id, order_update)
             if not order:
                 raise HTTPException(status_code=404, detail="Order not found")
             return order
+        
+        # Otherwise, only basic updates
         else:
-            raise HTTPException(
-                status_code=400,
-                detail="Only status updates are currently supported")
+            # Handle status update
+            if order_update.status is not None:
+                order = order_service.update_order_status(db, order_id, order_update.status)
+                if not order:
+                    raise HTTPException(status_code=404, detail="Order not found")
+                return order
+            
+            # For other basic field updates (route, notes) on non-PENDING orders
+            # We can add this functionality later if needed
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="For PENDING orders, provide 'items' for complete editing. For other orders, use status updates.")
+        
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# Status updates handled by existing endpoint PUT /{order_id}/status/{new_status}
 
 
 @router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT)

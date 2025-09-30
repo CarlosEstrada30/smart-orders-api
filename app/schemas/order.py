@@ -40,9 +40,12 @@ class OrderCreate(OrderBase):
 
 
 class OrderUpdate(BaseModel):
+    """Schema for order editing (complete for PENDING orders, basic for others)"""
+    client_id: Optional[int] = None
     route_id: Optional[int] = None
     status: Optional[OrderStatus] = None
     notes: Optional[str] = None
+    items: Optional[List[OrderItemCreate]] = None
 
 
 class OrderResponse(OrderBase):

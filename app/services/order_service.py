@@ -205,6 +205,14 @@ class OrderService:
                 raise ValueError(
                     f"Insufficient stock for product {product.name}")
 
+    def _validate_products_only(self, db: Session, items):
+        """Validate all products exist and are active (NO stock validation)"""
+        for item in items:
+            product = self.product_repository.get(db, item.product_id)
+            if not product or not product.is_active:
+                raise ValueError(
+                    f"Product {item.product_id} not found or inactive")
+
     def _reserve_stock_for_items(self, db: Session, items):
         """Reserve stock for all items"""
         for item in items:
@@ -219,30 +227,66 @@ class OrderService:
             self.product_service.update_stock(
                 db, item.product_id, item.quantity)
 
+    def _validate_and_reserve_stock_on_confirm(self, db: Session, order):
+        """Validate stock availability and reserve stock when confirming order"""
+        # First check if all items have sufficient stock
+        insufficient_items = []
+        for item in order.items:
+            if not self.product_service.check_stock_availability(
+                    db, item.product_id, item.quantity):
+                product = self.product_repository.get(db, item.product_id)
+                product_name = product.name if product else f"Product ID {item.product_id}"
+                insufficient_items.append(f"{product_name} (requested: {item.quantity})")
+        
+        if insufficient_items:
+            items_text = ", ".join(insufficient_items)
+            raise ValueError(f"Insufficient stock for: {items_text}")
+        
+        # If validation passes, reserve stock for all items
+        for item in order.items:
+            if not self.product_service.reserve_stock(
+                    db, item.product_id, item.quantity):
+                # If reservation fails, try to restore any previously reserved stock
+                # This is a fallback in case of concurrent modifications
+                product = self.product_repository.get(db, item.product_id)
+                product_name = product.name if product else f"Product ID {item.product_id}"
+                raise ValueError(f"Failed to reserve stock for {product_name}")
+        
+        return True
+
     def create_order(
             self,
             db: Session,
             order_data: OrderCreate) -> OrderResponse:
         self._validate_client(db, order_data.client_id)
         self._validate_route(db, order_data.route_id)
-        self._validate_products_and_stock(db, order_data.items)
-        self._reserve_stock_for_items(db, order_data.items)
+        # LACTEOS FLOW: Only validate products exist, NO stock validation
+        self._validate_products_only(db, order_data.items)
+        # LACTEOS FLOW: Do NOT reserve stock at creation, only when confirmed
+        # self._reserve_stock_for_items(db, order_data.items)
 
-        # Create the order
-        try:
-            order = self.order_repository.create_order_with_items(
-                db, order_data=order_data)
-            return self._process_order_response(order)
-        except Exception as e:
-            # If order creation fails, restore stock
-            self._restore_stock_for_items(db, order_data.items)
-            raise e
+        # Create the order (no stock reservation needed)
+        order = self.order_repository.create_order_with_items(
+            db, order_data=order_data)
+        return self._process_order_response(order)
 
     def update_order_status(
             self,
             db: Session,
             order_id: int,
             status: OrderStatus) -> Optional[OrderResponse]:
+        # Get current order to check status transition
+        current_order = self.order_repository.get(db, order_id)
+        if not current_order:
+            return None
+        
+        # LACTEOS FLOW: If confirming a pending order, validate and reserve stock
+        if (current_order.status == OrderStatus.PENDING and 
+            status == OrderStatus.CONFIRMED):
+            # Validate stock availability and reserve stock
+            self._validate_and_reserve_stock_on_confirm(db, current_order)
+        
+        # Update the order status
         order = self.order_repository.update_order_status(
             db, order_id=order_id, status=status)
         if not order:
@@ -261,14 +305,66 @@ class OrderService:
         if order.status not in [OrderStatus.PENDING, OrderStatus.CONFIRMED]:
             raise ValueError(f"Cannot cancel order with status {order.status}")
 
-        # Restore stock for all items
-        for item in order.items:
-            self.product_service.update_stock(
-                db, item.product_id, item.quantity)
+        # LACTEOS FLOW: Only restore stock if order was confirmed (had stock reserved)
+        # Pending orders don't have stock reserved, so no need to restore
+        if order.status == OrderStatus.CONFIRMED:
+            for item in order.items:
+                self.product_service.update_stock(
+                    db, item.product_id, item.quantity)
 
         updated_order = self.order_repository.update_order_status(
             db, order_id=order_id, status=OrderStatus.CANCELLED)
         return self._process_order_response(updated_order)
+
+    def update_pending_order(
+            self,
+            db: Session,
+            order_id: int,
+            order_update: "OrderUpdate") -> Optional["OrderResponse"]:
+        """
+        Update a PENDING order completely (client, items, route, notes)
+        LACTEOS FLOW: Allow full editing only for PENDING orders without stock validation
+        """
+        from ..schemas.order import OrderUpdate  # Import to avoid circular imports
+        
+        # Get current order
+        current_order = self.order_repository.get(db, order_id)
+        if not current_order:
+            return None
+        
+        # Only allow full editing of PENDING orders
+        if current_order.status != OrderStatus.PENDING:
+            raise ValueError(
+                f"Cannot edit order with status {current_order.status}. "
+                "Full editing is only allowed for PENDING orders.")
+        
+        # Validate new client if provided
+        if order_update.client_id is not None:
+            self._validate_client(db, order_update.client_id)
+        
+        # Validate new route if provided
+        if order_update.route_id is not None:
+            self._validate_route(db, order_update.route_id)
+        
+        # Validate new items if provided (NO stock validation, only product existence)
+        if order_update.items is not None:
+            self._validate_products_only(db, order_update.items)
+        
+        # Update the order with new data
+        try:
+            updated_order = self.order_repository.update_pending_order_complete(
+                db, 
+                order_id=order_id, 
+                order_update=order_update
+            )
+            
+            if not updated_order:
+                return None
+                
+            return self._process_order_response(updated_order)
+            
+        except Exception as e:
+            raise ValueError(f"Failed to update order: {str(e)}")
 
     def _is_valid_status_transition(
             self,

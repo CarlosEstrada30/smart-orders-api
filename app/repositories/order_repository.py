@@ -134,6 +134,56 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             db.refresh(order)
         return order
 
+    def update_pending_order_complete(
+            self,
+            db: Session,
+            *,
+            order_id: int,
+            order_update) -> Optional[Order]:
+        """
+        Update a PENDING order completely (client, items, route, notes)
+        LACTEOS FLOW: Complete update for PENDING orders
+        """
+        # Get the existing order
+        order = self.get(db, order_id)
+        if not order:
+            return None
+        
+        # Update basic fields if provided
+        if order_update.client_id is not None:
+            order.client_id = order_update.client_id
+        if order_update.route_id is not None:
+            order.route_id = order_update.route_id
+        if order_update.notes is not None:
+            order.notes = order_update.notes
+        
+        # If items are provided, replace all items
+        if order_update.items is not None:
+            # Delete existing items
+            db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
+            
+            # Create new items
+            total_amount = 0
+            for item_data in order_update.items:
+                item_total = item_data.quantity * item_data.unit_price
+                total_amount += item_total
+                
+                order_item = OrderItem(
+                    order_id=order.id,
+                    product_id=item_data.product_id,
+                    quantity=item_data.quantity,
+                    unit_price=item_data.unit_price,
+                    total_price=item_total
+                )
+                db.add(order_item)
+            
+            # Update total amount
+            order.total_amount = total_amount
+        
+        db.commit()
+        db.refresh(order)
+        return order
+
     def get_orders_with_filters(
         self,
         db: Session,
