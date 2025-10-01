@@ -16,6 +16,7 @@ from app.models import (
     Route,
     Invoice, InvoiceStatus, PaymentMethod,
     InventoryEntry, InventoryEntryItem, EntryType, EntryStatus,
+    ProductRoutePrice,
     Tenant,
     Settings
 )

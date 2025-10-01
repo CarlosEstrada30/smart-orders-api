@@ -49,6 +49,7 @@ class OrderService:
             "route_id": order.route_id,
             "status": order.status,
             "total_amount": order.total_amount,
+            "discount_percentage": order.discount_percentage,
             "notes": order.notes,
             "created_at": order.created_at,
             "updated_at": order.updated_at,
@@ -264,6 +265,9 @@ class OrderService:
         self._validate_products_only(db, order_data.items)
         # LACTEOS FLOW: Do NOT reserve stock at creation, only when confirmed
         # self._reserve_stock_for_items(db, order_data.items)
+
+        # Calculate prices based on route
+        self._calculate_item_prices_for_route(db, order_data)
 
         # Create the order (no stock reservation needed)
         order = self.order_repository.create_order_with_items(
@@ -528,3 +532,13 @@ class OrderService:
             year=year,
             period_name=period_name
         )
+
+    def _calculate_item_prices_for_route(self, db: Session, order_data: OrderCreate):
+        """Calculate item prices based on route, using route-specific prices or default product prices"""
+        for item in order_data.items:
+            # Get the appropriate price for this product and route
+            price = self.product_service.get_product_price_for_route(
+                db, item.product_id, order_data.route_id
+            )
+            # Update the unit price in the item
+            item.unit_price = price

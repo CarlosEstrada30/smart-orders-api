@@ -87,9 +87,17 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
 
         # Calculate total amount
-        total_amount = sum(
+        subtotal = sum(
             item.quantity *
             item.unit_price for item in order_data.items)
+        
+        # Apply discount if provided
+        discount_percentage = getattr(order_data, 'discount_percentage', 0.0) or 0.0
+        if discount_percentage > 0:
+            discount_amount = subtotal * (discount_percentage / 100)
+            total_amount = subtotal - discount_amount
+        else:
+            total_amount = subtotal
 
         # Create order
         order = Order(
@@ -98,6 +106,7 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             route_id=order_data.route_id,
             status=order_data.status,
             total_amount=total_amount,
+            discount_percentage=discount_percentage,
             notes=order_data.notes
         )
         db.add(order)

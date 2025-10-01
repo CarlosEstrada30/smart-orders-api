@@ -3,15 +3,53 @@ from sqlalchemy.orm import Session
 import pandas as pd
 from pydantic import ValidationError
 from ..repositories.product_repository import ProductRepository
-from ..schemas.product import ProductCreate, ProductUpdate
+from ..repositories.product_route_price_repository import ProductRoutePriceRepository
+from ..repositories.route_repository import RouteRepository
+from ..schemas.product import ProductCreate, ProductUpdate, ProductResponse
+from ..schemas.product_route_price import ProductRoutePriceCreate, ProductRoutePriceUpdate, ProductRoutePriceResponse, ProductRoutePriceSimpleResponse
 from ..schemas.bulk_upload import ProductBulkUploadResult, BulkUploadError
 from ..models.product import Product
+from ..models.product_route_price import ProductRoutePrice
 from ..utils.excel_utils import ExcelProcessor
 
 
 class ProductService:
     def __init__(self):
         self.repository = ProductRepository()
+        self.route_price_repository = ProductRoutePriceRepository()
+        self.route_repository = RouteRepository()
+
+    def _convert_to_response(self, db: Session, product: Product) -> ProductResponse:
+        """Convert Product model to ProductResponse with route prices"""
+        # Get route prices for this product
+        route_prices = self.get_product_route_prices(db, product.id)
+        
+        # Convert route prices to response format
+        route_price_responses = []
+        for route_price in route_prices:
+            # Get route name from database
+            route = self.route_repository.get(db, route_price.route_id)
+            route_name = route.name if route else None
+            
+            route_price_responses.append(ProductRoutePriceSimpleResponse(
+                product_id=route_price.product_id,
+                route_id=route_price.route_id,
+                price=route_price.price,
+                route_name=route_name
+            ))
+        
+        return ProductResponse(
+            id=product.id,
+            name=product.name,
+            description=product.description,
+            price=product.price,
+            stock=product.stock,
+            sku=product.sku,
+            is_active=product.is_active,
+            created_at=product.created_at,
+            updated_at=product.updated_at,
+            route_prices=route_price_responses if route_price_responses else None
+        )
 
     def get_product(self, db: Session, product_id: int) -> Optional[Product]:
         return self.repository.get(db, product_id)
@@ -20,24 +58,28 @@ class ProductService:
         return self.repository.get_by_sku(db, sku=sku)
 
     def get_products(self, db: Session, skip: int = 0,
-                     limit: int = 100) -> List[Product]:
-        return self.repository.get_multi(db, skip=skip, limit=limit)
+                     limit: int = 100) -> List[ProductResponse]:
+        products = self.repository.get_multi(db, skip=skip, limit=limit)
+        return [self._convert_to_response(db, product) for product in products]
 
     def get_active_products(
             self,
             db: Session,
             skip: int = 0,
-            limit: int = 100) -> List[Product]:
-        return self.repository.get_active_products(db, skip=skip, limit=limit)
+            limit: int = 100) -> List[ProductResponse]:
+        products = self.repository.get_active_products(db, skip=skip, limit=limit)
+        return [self._convert_to_response(db, product) for product in products]
 
-    def search_products_by_name(self, db: Session, name: str) -> List[Product]:
-        return self.repository.search_by_name(db, name=name)
+    def search_products_by_name(self, db: Session, name: str) -> List[ProductResponse]:
+        products = self.repository.search_by_name(db, name=name)
+        return [self._convert_to_response(db, product) for product in products]
 
     def get_low_stock_products(
             self,
             db: Session,
-            threshold: int = 10) -> List[Product]:
-        return self.repository.get_low_stock_products(db, threshold=threshold)
+            threshold: int = 10) -> List[ProductResponse]:
+        products = self.repository.get_low_stock_products(db, threshold=threshold)
+        return [self._convert_to_response(db, product) for product in products]
 
     def create_product(self, db: Session, product: ProductCreate) -> Product:
         # Check if product with SKU already exists
@@ -319,3 +361,54 @@ class ProductService:
                 result.failed_uploads += 1
         
         return result
+
+    # Métodos para manejar precios por ruta
+    def get_product_price_for_route(self, db: Session, product_id: int, route_id: Optional[int] = None) -> float:
+        """Obtener el precio de un producto para una ruta específica o el precio por defecto"""
+        product = self.get_product(db, product_id)
+        if not product:
+            raise ValueError("Product not found")
+        
+        if route_id:
+            route_price = self.route_price_repository.get_price_for_product_route(db, product_id, route_id)
+            if route_price is not None:
+                return route_price
+        
+        # Usar precio por defecto del producto
+        return product.price
+
+    def set_product_route_price(self, db: Session, product_id: int, route_id: int, price: float) -> ProductRoutePrice:
+        """Establecer precio específico de un producto para una ruta"""
+        # Verificar que el producto existe
+        product = self.get_product(db, product_id)
+        if not product:
+            raise ValueError("Product not found")
+        
+        # Verificar que la ruta existe (asumiendo que hay un servicio de rutas)
+        # TODO: Agregar verificación de ruta cuando esté disponible
+        
+        # Crear o actualizar precio por ruta
+        existing_price = self.route_price_repository.get_by_product_and_route(db, product_id, route_id)
+        if existing_price:
+            return self.route_price_repository.update(db, db_obj=existing_price, obj_in={"price": price})
+        else:
+            from ..schemas.product_route_price import ProductRoutePriceCreate
+            create_data = ProductRoutePriceCreate(
+                product_id=product_id,
+                route_id=route_id,
+                price=price
+            )
+            return self.route_price_repository.create(db, obj_in=create_data)
+
+    def get_product_route_prices(self, db: Session, product_id: int) -> List[ProductRoutePrice]:
+        """Obtener todos los precios por ruta de un producto"""
+        return self.route_price_repository.get_by_product(db, product_id)
+
+    def delete_product_route_price(self, db: Session, product_id: int, route_id: int) -> bool:
+        """Eliminar precio específico de un producto para una ruta"""
+        price_entry = self.route_price_repository.get_by_product_and_route(db, product_id, route_id)
+        if not price_entry:
+            return False
+        
+        self.route_price_repository.remove(db, id=price_entry.id)
+        return True

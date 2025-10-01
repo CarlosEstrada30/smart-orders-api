@@ -6,6 +6,7 @@ from .order import Order, OrderItem
 from .route import Route
 from .invoice import Invoice, InvoiceStatus, PaymentMethod
 from .inventory_entry import InventoryEntry, InventoryEntryItem, EntryType, EntryStatus
+from .product_route_price import ProductRoutePrice
 from .tenant import Tenant
 from .settings import Settings
 
@@ -25,5 +26,6 @@ __all__ = [
     "InventoryEntryItem",
     "EntryType",
     "EntryStatus",
+    "ProductRoutePrice",
     "Tenant",
     "Settings"]
