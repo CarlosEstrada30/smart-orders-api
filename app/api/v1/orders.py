@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from io import BytesIO
-from ...schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate, OrderAnalyticsSummary, StatusDistributionSummary
+from ...schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate, OrderAnalyticsSummary, StatusDistributionSummary, BatchOrderUpdateRequest, BatchOrderUpdateResponse
 from ...schemas.pagination import PaginatedResponse
 from ...services.order_service import OrderService
 from ...services.compact_receipt_generator import CompactReceiptGenerator
@@ -157,6 +157,48 @@ def get_order(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     return order
+
+
+@router.put("/bulk-status", response_model=BatchOrderUpdateResponse)
+def batch_update_order_status(
+    batch_request: BatchOrderUpdateRequest,
+    db: Session = Depends(get_tenant_db),
+    order_service: OrderService = Depends(get_order_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Update status for multiple orders (requires authentication)"""
+    try:
+        # Check permissions
+        if not can_create_orders(current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="No tienes permisos para cambiar el estado de pedidos. Se requiere rol de Vendedor o superior."
+            )
+        
+        # Special validation for delivery status
+        if batch_request.status == OrderStatus.DELIVERED:
+            if not can_update_delivery_status(current_user):
+                raise HTTPException(
+                    status_code=403,
+                    detail="No tienes permisos para marcar pedidos como entregados. Se requiere rol de Repartidor o superior."
+                )
+        
+        # Perform batch update
+        result = order_service.batch_update_status(
+            db, 
+            batch_request.order_ids, 
+            batch_request.status, 
+            batch_request.notes
+        )
+        
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error updating orders: {str(e)}")
 
 
 @router.put("/{order_id}", response_model=OrderResponse)

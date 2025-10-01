@@ -255,6 +255,73 @@ class OrderService:
         
         return True
 
+    def _restore_stock_on_status_change(self, db: Session, order):
+        """Restore stock when order goes back to pending or cancelled"""
+        try:
+            for item in order.items:
+                # Restore stock (add back the quantity)
+                success = self.product_service.reserve_stock(
+                    db, item.product_id, -item.quantity  # Negative quantity to add stock
+                )
+                if not success:
+                    # Log error but continue with other items
+                    print(f"Warning: Could not restore stock for product {item.product_id}")
+        except Exception as e:
+            print(f"Error restoring stock for order {order.id}: {str(e)}")
+            # Don't raise exception to avoid breaking the status update
+
+    def _validate_stock_availability_for_order(self, db: Session, order):
+        """Validate stock availability for an order without reserving it"""
+        from ..schemas.order import OrderUpdateError, ProductError
+        
+        products_with_errors = []
+        
+        for item in order.items:
+            # Check if product exists and is active
+            product = self.product_repository.get(db, item.product_id)
+            if not product:
+                products_with_errors.append(ProductError(
+                    product_id=item.product_id,
+                    product_name=f"Product ID {item.product_id}",
+                    product_sku="N/A",
+                    error_type="product_not_found",
+                    error_message=f"Product with ID {item.product_id} not found"
+                ))
+                continue
+            
+            if not product.is_active:
+                products_with_errors.append(ProductError(
+                    product_id=product.id,
+                    product_name=product.name,
+                    product_sku=product.sku,
+                    error_type="product_inactive",
+                    error_message=f"Product '{product.name}' is not active"
+                ))
+                continue
+            
+            # Check stock availability
+            if product.stock < item.quantity:
+                products_with_errors.append(ProductError(
+                    product_id=product.id,
+                    product_name=product.name,
+                    product_sku=product.sku,
+                    error_type="insufficient_stock",
+                    error_message=f"Insufficient stock for product '{product.name}'. Required: {item.quantity}, Available: {product.stock}",
+                    required_quantity=item.quantity,
+                    available_quantity=product.stock
+                ))
+        
+        if products_with_errors:
+            return OrderUpdateError(
+                order_id=order.id,
+                order_number=order.order_number,
+                error_type="stock_validation_failed",
+                error_message=f"Order {order.order_number} failed stock validation",
+                products_with_errors=products_with_errors
+            )
+        
+        return None  # No errors found
+
     def create_order(
             self,
             db: Session,
@@ -289,6 +356,13 @@ class OrderService:
             status == OrderStatus.CONFIRMED):
             # Validate stock availability and reserve stock
             self._validate_and_reserve_stock_on_confirm(db, current_order)
+        
+        # STOCK RESTORATION: If going back to pending or cancelled from confirmed states
+        confirmed_states = {OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS, OrderStatus.SHIPPED, OrderStatus.DELIVERED}
+        if (current_order.status in confirmed_states and 
+            status in {OrderStatus.PENDING, OrderStatus.CANCELLED}):
+            # Restore stock (add back the reserved quantity)
+            self._restore_stock_on_status_change(db, current_order)
         
         # Update the order status
         order = self.order_repository.update_order_status(
@@ -542,3 +616,103 @@ class OrderService:
             )
             # Update the unit price in the item
             item.unit_price = price
+
+    def batch_update_status(self, db: Session, order_ids: List[int], new_status: OrderStatus, notes: Optional[str] = None) -> dict:
+        """Update status for multiple orders with proper stock management and granular error handling"""
+        from ..schemas.order import BatchOrderUpdateResponse, OrderUpdateError, OrderUpdateSuccess, ProductError
+        
+        success_orders = []
+        failed_orders = []
+        success_details = []
+        failed_details = []
+        
+        for order_id in order_ids:
+            try:
+                # Get the order first to check if it exists
+                order = self.order_repository.get(db, order_id)
+                if not order:
+                    failed_orders.append(order_id)
+                    failed_details.append(OrderUpdateError(
+                        order_id=order_id,
+                        error_type="order_not_found",
+                        error_message=f"Order {order_id} not found",
+                        products_with_errors=[]
+                    ))
+                    continue
+                
+                # Check if this is a stock-requiring transition
+                confirmed_states = {OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS, OrderStatus.SHIPPED, OrderStatus.DELIVERED}
+                requires_stock = (order.status == OrderStatus.PENDING and new_status in confirmed_states)
+                
+                if requires_stock:
+                    # Validate stock availability before updating status
+                    stock_error = self._validate_stock_availability_for_order(db, order)
+                    if stock_error:
+                        failed_orders.append(order_id)
+                        failed_details.append(stock_error)
+                        continue
+                
+                # Use the existing update_order_status method to ensure consistent stock management
+                updated_order = self.update_order_status(db, order_id, new_status)
+                
+                if updated_order:
+                    # Update notes if provided
+                    if notes:
+                        self.order_repository.update(
+                            db, 
+                            db_obj=order, 
+                            obj_in={"notes": notes}
+                        )
+                    
+                    # Get product details for successful orders
+                    products_updated = []
+                    for item in order.items:
+                        product = self.product_repository.get(db, item.product_id)
+                        if product:
+                            products_updated.append({
+                                "product_id": product.id,
+                                "product_name": product.name,
+                                "product_sku": product.sku,
+                                "quantity": item.quantity,
+                                "unit_price": item.unit_price
+                            })
+                    
+                    success_orders.append(order_id)
+                    success_details.append(OrderUpdateSuccess(
+                        order_id=order.id,
+                        order_number=order.order_number,
+                        products_updated=products_updated
+                    ))
+                else:
+                    failed_orders.append(order_id)
+                    failed_details.append(OrderUpdateError(
+                        order_id=order_id,
+                        order_number=order.order_number,
+                        error_type="update_failed",
+                        error_message=f"Failed to update order {order_id} status",
+                        products_with_errors=[]
+                    ))
+                    
+            except Exception as e:
+                # Log the error (you might want to add proper logging here)
+                print(f"Error updating order {order_id}: {str(e)}")
+                failed_orders.append(order_id)
+                order_number = order.order_number if order else None
+                failed_details.append(OrderUpdateError(
+                    order_id=order_id,
+                    order_number=order_number,
+                    error_type="unexpected_error",
+                    error_message=str(e),
+                    products_with_errors=[]
+                ))
+        
+        return BatchOrderUpdateResponse(
+            updated_count=len(success_orders),
+            failed_count=len(failed_orders),
+            total_orders=len(order_ids),
+            status=new_status,
+            failed_orders=failed_orders,
+            success_orders=success_orders,
+            success_details=success_details,
+            failed_details=failed_details
+        )

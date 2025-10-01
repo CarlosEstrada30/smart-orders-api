@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 from ..models.order import OrderStatus
@@ -110,3 +110,49 @@ class StatusDistributionSummary(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+class BatchOrderUpdateRequest(BaseModel):
+    """Schema for batch order status updates"""
+    order_ids: List[int] = Field(..., min_items=1, description="List of order IDs to update")
+    status: OrderStatus = Field(..., description="New status to set for all orders")
+    notes: Optional[str] = Field(None, description="Optional notes for the status change")
+
+
+class ProductError(BaseModel):
+    """Schema for product error details"""
+    product_id: int
+    product_name: str
+    product_sku: str
+    error_type: str
+    error_message: str
+    required_quantity: Optional[int] = None
+    available_quantity: Optional[int] = None
+
+
+class OrderUpdateError(BaseModel):
+    """Schema for order update error details"""
+    order_id: int
+    order_number: Optional[str] = None
+    error_type: str
+    error_message: str
+    products_with_errors: List[ProductError] = Field(default_factory=list, description="Products that caused errors")
+
+
+class OrderUpdateSuccess(BaseModel):
+    """Schema for successful order update details"""
+    order_id: int
+    order_number: str
+    products_updated: List[dict] = Field(default_factory=list, description="Products that were processed")
+
+
+class BatchOrderUpdateResponse(BaseModel):
+    """Schema for batch order update response"""
+    updated_count: int
+    failed_count: int
+    total_orders: int
+    status: OrderStatus
+    failed_orders: List[int] = Field(default_factory=list, description="Order IDs that failed to update")
+    success_orders: List[int] = Field(default_factory=list, description="Order IDs that were updated successfully")
+    success_details: List[OrderUpdateSuccess] = Field(default_factory=list, description="Detailed success information")
+    failed_details: List[OrderUpdateError] = Field(default_factory=list, description="Detailed error information for failed orders")
