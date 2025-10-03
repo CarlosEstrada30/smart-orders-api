@@ -139,10 +139,10 @@ class InventoryEntryService:
         # Create the entry
         entry = self.inventory_repository.create_entry_with_items(
             db, entry_data=entry_data, user_id=user_id)
-        
+
         # Update product stock based on entry type
         self._update_product_stock(db, entry_data)
-        
+
         return self._process_entry_response(entry)
 
     def _update_product_stock(self, db: Session, entry_data: InventoryEntryCreate):
@@ -161,16 +161,16 @@ class InventoryEntryService:
                     elif entry_data.entry_type == "out":
                         quantity_change = -item.quantity
                         print(f"DEBUG: Subtracting {item.quantity} from stock")
-                    
+
                     # Update stock using the repository method
                     updated_product = self.product_repository.update_stock(db, product_id=product.id, quantity=quantity_change)
                     if updated_product:
                         print(f"DEBUG: Product updated successfully. New stock: {updated_product.stock}")
                     else:
-                        print(f"DEBUG: Failed to update product")
+                        print("DEBUG: Failed to update product")
                 else:
                     print(f"DEBUG: Product {item.product_id} not found")
-            
+
             print("DEBUG: Stock update completed successfully")
         except Exception as e:
             print(f"DEBUG ERROR in _update_product_stock: {str(e)}")
@@ -178,7 +178,6 @@ class InventoryEntryService:
             print(f"DEBUG TRACEBACK: {traceback.format_exc()}")
             db.rollback()
             raise
-
 
     def update_entry(
             self,
@@ -198,7 +197,7 @@ class InventoryEntryService:
         update_data = entry_update.model_dump(exclude_unset=True)
         updated_entry = self.inventory_repository.update(
             db, db_obj=entry, obj_in=update_data)
-        
+
         return self._process_entry_response(updated_entry)
 
     def approve_entry(

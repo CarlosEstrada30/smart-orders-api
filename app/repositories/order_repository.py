@@ -90,7 +90,7 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         subtotal = sum(
             item.quantity *
             item.unit_price for item in order_data.items)
-        
+
         # Apply discount if provided
         discount_percentage = getattr(order_data, 'discount_percentage', 0.0) or 0.0
         if discount_percentage > 0:
@@ -157,7 +157,7 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         order = self.get(db, order_id)
         if not order:
             return None
-        
+
         # Update basic fields if provided
         if order_update.client_id is not None:
             order.client_id = order_update.client_id
@@ -165,18 +165,18 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             order.route_id = order_update.route_id
         if order_update.notes is not None:
             order.notes = order_update.notes
-        
+
         # If items are provided, replace all items
         if order_update.items is not None:
             # Delete existing items
             db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
-            
+
             # Create new items
             total_amount = 0
             for item_data in order_update.items:
                 item_total = item_data.quantity * item_data.unit_price
                 total_amount += item_total
-                
+
                 order_item = OrderItem(
                     order_id=order.id,
                     product_id=item_data.product_id,
@@ -185,10 +185,10 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
                     total_price=item_total
                 )
                 db.add(order_item)
-            
+
             # Update total amount
             order.total_amount = total_amount
-        
+
         db.commit()
         db.refresh(order)
         return order
@@ -331,7 +331,7 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
     ) -> List[dict]:
         """Get monthly summary of orders by status with optional year/date range filters"""
         from sqlalchemy import func, extract
-        
+
         # Base query with aggregation
         query = db.query(
             extract('year', Order.created_at).label('year'),
@@ -339,31 +339,31 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             func.count(Order.id).label('order_count'),
             func.sum(Order.total_amount).label('total_amount')
         )
-        
+
         # Build filters
         filters = []
-        
+
         # Status filter (direct enum comparison)
         filters.append(Order.status == status)
-        
+
         # Year filter
         if year is not None:
             filters.append(extract('year', Order.created_at) == year)
-        
+
         # Date range filters
         if start_date is not None:
             filters.append(
                 Order.created_at >= datetime.combine(start_date, datetime.min.time())
             )
-        
+
         if end_date is not None:
             filters.append(
                 Order.created_at <= datetime.combine(end_date, datetime.max.time())
             )
-        
+
         # Apply filters
         query = query.filter(and_(*filters))
-        
+
         # Group by year and month, order by year and month
         query = query.group_by(
             extract('year', Order.created_at),
@@ -372,7 +372,7 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             extract('year', Order.created_at),
             extract('month', Order.created_at)
         )
-        
+
         return [
             {
                 'year': int(row.year),
@@ -392,22 +392,22 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
     ) -> List[dict]:
         """Get count of orders by status for a specific month/year"""
         from sqlalchemy import func, extract
-        
+
         # Base query with aggregation by status
         query = db.query(
             Order.status.label('status'),
             func.count(Order.id).label('count')
         )
-        
+
         # Filter by specific month and year
         query = query.filter(
             extract('year', Order.created_at) == year,
             extract('month', Order.created_at) == month
         )
-        
+
         # Group by status
         query = query.group_by(Order.status)
-        
+
         return [
             {
                 'status': str(row.status),

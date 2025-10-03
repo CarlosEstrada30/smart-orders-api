@@ -37,6 +37,6 @@ __all__ = [
     "PaginatedResponse",
     "PaginationInfo",
     "BulkUploadResult",
-    "BulkUploadError", 
+    "BulkUploadError",
     "ClientBulkUploadResult",
     "ProductBulkUploadResult"]

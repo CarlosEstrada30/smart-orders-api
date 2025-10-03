@@ -34,7 +34,7 @@ class ProductRoutePriceRepository(BaseRepository[ProductRoutePrice, ProductRoute
             price_entry = self.get_by_product_and_route(db, product_id, route_id)
             if price_entry:
                 return price_entry.price
-        
+
         # Si no hay ruta específica o no se encontró precio para esa ruta,
         # devolver None para que se use el precio por defecto del producto
         return None

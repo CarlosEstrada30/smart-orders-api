@@ -19,5 +19,3 @@ class ProductRoutePrice(Base):
     __table_args__ = (
         UniqueConstraint('product_id', 'route_id', name='_product_route_uc'),
     )
-
-

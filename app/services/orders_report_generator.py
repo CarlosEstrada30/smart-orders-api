@@ -325,7 +325,7 @@ class OrdersReportGenerator:
                 quantity = item.quantity
                 unit_price = item.unit_price
                 subtotal = quantity * unit_price
-                
+
                 # Formato compacto: cantidad, nombre y subtotal en una línea
                 if hasattr(item.product, 'unit') and item.product.unit:
                     products_summary.append(
@@ -351,7 +351,7 @@ class OrdersReportGenerator:
 
             # Crear número de orden con fecha debajo
             order_number_with_date = f"{order.order_number}<br/><font size='6'>{order.created_at.strftime('%d/%m/%Y')}</font>"
-            
+
             row = [
                 Paragraph(order_number_with_date, self.styles['CompactText']),
                 status_text,
@@ -456,12 +456,12 @@ class OrdersReportGenerator:
         dates = [order.created_at for order in orders]
         min_date = min(dates)
         max_date = max(dates)
-        
+
         if min_date.date() == max_date.date():
             date_range = f"Fecha: {min_date.strftime('%d/%m/%Y')}"
         else:
             date_range = f"Período: {min_date.strftime('%d/%m/%Y')} - {max_date.strftime('%d/%m/%Y')}"
-        
+
         elements.append(Paragraph(date_range, self.styles['ClientInfo']))
 
         # Consolidar productos de la ruta
@@ -476,13 +476,13 @@ class OrdersReportGenerator:
                 total_quantity = data['total_quantity']
                 total_value = data['total_value']
                 unit = data.get('unit', 'unidades')
-                
+
                 # Formatear cantidad con unidad
                 if unit and unit != 'unidades':
                     quantity_text = f"{total_quantity:,.0f} {unit}"
                 else:
                     quantity_text = f"{total_quantity:,.0f} unidades"
-                
+
                 table_data.append([
                     product_name,
                     quantity_text,
@@ -569,7 +569,7 @@ class OrdersReportGenerator:
 
         # Salto de página antes del resumen general
         elements.append(PageBreak())
-        
+
         elements.append(Spacer(1, 2 * mm))  # Reducido de 3mm a 2mm
         elements.append(
             Paragraph(

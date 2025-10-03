@@ -13,7 +13,7 @@ class BulkUploadResult(BaseModel):
     successful_uploads: int
     failed_uploads: int
     errors: List[BulkUploadError] = []
-    
+
     @property
     def success_rate(self) -> float:
         if self.total_rows == 0:
@@ -27,4 +27,3 @@ class ClientBulkUploadResult(BulkUploadResult):
 
 class ProductBulkUploadResult(BulkUploadResult):
     created_products: List[Dict[str, Any]] = []
-

@@ -31,7 +31,7 @@ def get_tenant_db(
 
     Funciona tanto para esquema 'public' como para tenants específicos.
     Esta es la función central para multi-tenancy.
-    
+
     IMPORTANTE: Usa yield para que FastAPI cierre automáticamente la sesión.
     """
     db = None
@@ -67,7 +67,7 @@ def get_tenant_db(
         if db:
             db.close()
         raise
-    except Exception as e:
+    except Exception:
         # Manejar otros errores
         if db:
             db.close()

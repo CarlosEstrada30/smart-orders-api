@@ -35,5 +35,3 @@ class ProductionDashboardFilters(BaseModel):
     product_category: Optional[str] = None
     priority_level: Optional[str] = None
     min_shortage_value: Optional[float] = None
-
-

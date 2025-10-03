@@ -76,12 +76,12 @@ async def export_products(
 ):
     """
     Export products to Excel file (requires authentication)
-    
+
     Parameters:
     - active_only: Export only active products (default: false)
-    - skip: Number of records to skip (default: 0)  
+    - skip: Number of records to skip (default: 0)
     - limit: Maximum number of records to export (default: 10000)
-    
+
     Returns an Excel file with the same format as the import template.
     """
     try:
@@ -90,7 +90,7 @@ async def export_products(
             products = product_service.get_active_products(db, skip=skip, limit=limit)
         else:
             products = product_service.get_products(db, skip=skip, limit=limit)
-        
+
         # Convert to dict format for Excel generator
         products_data = []
         for product in products:
@@ -102,15 +102,15 @@ async def export_products(
                 'sku': product.sku,
                 'is_active': product.is_active
             })
-        
+
         # Generate Excel data
         excel_data = ExcelGenerator.export_products_data(products_data)
-        
+
         # Generate filename with timestamp
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"productos_export_{timestamp}.xlsx"
-        
+
         return StreamingResponse(
             io.BytesIO(excel_data),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -221,20 +221,20 @@ async def bulk_upload_products(
 ):
     """
     Bulk upload products from Excel file (requires authentication)
-    
+
     The Excel file should preferably have a 'Productos' sheet, but any sheet will work.
     Accepts column names in Spanish or English:
-    
+
     REQUIRED COLUMNS (any of these names):
     - nombre / name / Name / Nombre / NOMBRE: Product name
     - precio / price / Price / Precio / PRECIO: Product price (must be > 0)
     - sku / SKU / codigo / código / Codigo / Código: Product SKU (must be unique)
-    
+
     OPTIONAL COLUMNS (any of these names):
     - descripcion / description / Description / Descripción: Product description
     - stock / Stock / inventario / Inventario: Stock quantity (default: 0)
     - activo / is_active / active / Active: true/false for active status (default: true)
-    
+
     Download the template using GET /api/v1/products/template/download for the correct format.
     """
     try:
@@ -255,7 +255,7 @@ async def download_products_template(
     """
     try:
         excel_data = ExcelGenerator.create_products_template()
-        
+
         return StreamingResponse(
             io.BytesIO(excel_data),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

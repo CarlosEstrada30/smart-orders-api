@@ -4,7 +4,11 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from .database import engine
 from .models import Base
-from .api.v1 import users, clients, products, orders, routes, auth, invoices, inventory, tenants, settings, product_route_prices, production
+from .api.v1 import (
+    users, clients, products, orders, routes, auth,
+    invoices, inventory, tenants, settings,
+    product_route_prices, production
+)
 import os
 
 # IMPORTANTE: No crear tablas automáticamente en producción
@@ -71,7 +75,7 @@ async def health_check():
         # Verificar conexión a base de datos
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
-        
+
         return JSONResponse(
             status_code=200,
             content={
@@ -87,7 +91,7 @@ async def health_check():
             status_code=503,
             content={
                 "status": "unhealthy",
-                "service": "smart-orders-api", 
+                "service": "smart-orders-api",
                 "environment": os.getenv("ENVIRONMENT", "development"),
                 "error": str(e),
                 "database": "disconnected",
@@ -106,15 +110,15 @@ async def detailed_health_check():
         import sys
         sys.path.append(".")
         from scripts.health_check import run_health_checks
-        
+
         result = await run_health_checks()
-        
+
         status_code = 200
         if result["status"] == "unhealthy":
             status_code = 503
         elif result["status"] == "warning":
             status_code = 200  # Warnings no deben fallar el health check
-        
+
         return JSONResponse(
             status_code=status_code,
             content=result

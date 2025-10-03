@@ -72,7 +72,7 @@ class MonthlySummary(BaseModel):
     month_name: str
     order_count: int
     total_amount: float
-    
+
     class Config:
         from_attributes = True
 
@@ -84,7 +84,7 @@ class OrderAnalyticsSummary(BaseModel):
     total_amount: float
     period_start: Optional[str] = None
     period_end: Optional[str] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -95,7 +95,7 @@ class StatusDistribution(BaseModel):
     status_name: str
     count: int
     percentage: float
-    
+
     class Config:
         from_attributes = True
 
@@ -107,7 +107,7 @@ class StatusDistributionSummary(BaseModel):
     month: int
     year: int
     period_name: str
-    
+
     class Config:
         from_attributes = True
 
@@ -155,4 +155,7 @@ class BatchOrderUpdateResponse(BaseModel):
     failed_orders: List[int] = Field(default_factory=list, description="Order IDs that failed to update")
     success_orders: List[int] = Field(default_factory=list, description="Order IDs that were updated successfully")
     success_details: List[OrderUpdateSuccess] = Field(default_factory=list, description="Detailed success information")
-    failed_details: List[OrderUpdateError] = Field(default_factory=list, description="Detailed error information for failed orders")
+    failed_details: List[OrderUpdateError] = Field(
+        default_factory=list,
+        description="Detailed error information for failed orders"
+    )

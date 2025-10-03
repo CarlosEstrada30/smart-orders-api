@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
 
 
 class ProductRoutePriceBase(BaseModel):
@@ -35,5 +34,3 @@ class ProductRoutePriceSimpleResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
