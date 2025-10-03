@@ -30,13 +30,13 @@ def get_engine_config_for_tenant():
             "application_name": "smart-orders-api-tenant"
         }
     }
-    
+
     # Configuraciones específicas para producción (Render)
     if settings.is_production:
         config["connect_args"].update({
             "sslmode": settings.DB_SSL_MODE if settings.DB_SSL_MODE != "prefer" else "require",
         })
-        
+
         # Agregar certificados SSL si están configurados
         if settings.DB_SSL_CERT:
             config["connect_args"]["sslcert"] = settings.DB_SSL_CERT
@@ -44,7 +44,7 @@ def get_engine_config_for_tenant():
             config["connect_args"]["sslkey"] = settings.DB_SSL_KEY
         if settings.DB_SSL_ROOT_CERT:
             config["connect_args"]["sslrootcert"] = settings.DB_SSL_ROOT_CERT
-            
+
         # Pool aún más conservador para tenants en producción
         config["pool_size"] = min(2, config["pool_size"])
         config["max_overflow"] = min(3, config["max_overflow"])
@@ -53,7 +53,7 @@ def get_engine_config_for_tenant():
         # Pool ultra conservador para desarrollo local con tenants
         config["pool_size"] = 1  # Solo 1 conexión por schema en desarrollo
         config["max_overflow"] = 2  # Máximo 2 overflow
-    
+
     return config
 
 
@@ -67,16 +67,16 @@ def get_engine_for_schema(schema_name: str):
         quoted_schema = f'%22{schema_name}%22'
     else:
         quoted_schema = schema_name
-    
+
     # Crear URL con search_path específico para el schema
     base_url = settings.get_database_url()
     # Determinar el separador correcto para parámetros adicionales
     separator = "&" if "?" in base_url else "?"
     db_url = f"{base_url}{separator}options=-csearch_path%3D{quoted_schema}"
-    
+
     # Aplicar configuración específica para tenant
     engine_config = get_engine_config_for_tenant()
-    
+
     return create_engine(
         db_url,
         **engine_config,
@@ -93,23 +93,23 @@ def get_session_for_schema(schema_name: str):
     from sqlalchemy.exc import OperationalError, DisconnectionError
     import time
     import logging
-    
+
     logger = logging.getLogger(__name__)
-    
+
     max_retries = 3
     retry_delay = 1  # segundos
-    
+
     for attempt in range(max_retries):
         try:
             engine = get_engine_for_schema(schema_name)
             SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
             session = SessionLocal()
-            
+
             # Verificar que la conexión funciona
             from sqlalchemy import text
             session.execute(text("SELECT 1"))
             return session
-            
+
         except (OperationalError, DisconnectionError) as e:
             if attempt == max_retries - 1:
                 logger.error(f"Error de conexión para schema '{schema_name}' después de {max_retries} intentos: {e}")

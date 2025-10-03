@@ -66,12 +66,12 @@ async def export_clients(
 ):
     """
     Export clients to Excel file (requires authentication)
-    
+
     Parameters:
     - active_only: Export only active clients (default: false)
-    - skip: Number of records to skip (default: 0)  
+    - skip: Number of records to skip (default: 0)
     - limit: Maximum number of records to export (default: 10000)
-    
+
     Returns an Excel file with the same format as the import template.
     """
     try:
@@ -80,7 +80,7 @@ async def export_clients(
             clients = client_service.get_active_clients(db, skip=skip, limit=limit)
         else:
             clients = client_service.get_clients(db, skip=skip, limit=limit)
-        
+
         # Convert to dict format for Excel generator
         clients_data = []
         for client in clients:
@@ -92,15 +92,15 @@ async def export_clients(
                 'address': client.address,
                 'is_active': client.is_active
             })
-        
+
         # Generate Excel data
         excel_data = ExcelGenerator.export_clients_data(clients_data)
-        
+
         # Generate filename with timestamp
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"clientes_export_{timestamp}.xlsx"
-        
+
         return StreamingResponse(
             io.BytesIO(excel_data),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -179,20 +179,20 @@ async def bulk_upload_clients(
 ):
     """
     Bulk upload clients from Excel file (requires authentication)
-    
+
     The Excel file should preferably have a 'Clientes' sheet, but any sheet will work.
     Accepts column names in Spanish or English:
-    
+
     REQUIRED COLUMNS (any of these names):
     - name / nombre / Name / Nombre / NOMBRE: Client name
-    
+
     OPTIONAL COLUMNS (any of these names):
     - email / correo / Email / Correo: Client email
     - phone / telefono / teléfono / Phone / Teléfono: Client phone
     - nit / NIT / Nit: Client NIT
     - address / direccion / dirección / Address / Dirección: Client address
     - is_active / activo / Active / Activo: true/false for active status
-    
+
     Download the template using GET /api/v1/clients/template/download for the correct format.
     """
     try:
@@ -213,7 +213,7 @@ async def download_clients_template(
     """
     try:
         excel_data = ExcelGenerator.create_clients_template()
-        
+
         return StreamingResponse(
             io.BytesIO(excel_data),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

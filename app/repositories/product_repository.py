@@ -19,7 +19,7 @@ class ProductRepository(BaseRepository[Product, ProductCreate, ProductUpdate]):
             skip: int = 0,
             limit: int = 100) -> List[Product]:
         return db.query(Product).filter(
-            Product.is_active).offset(skip).limit(limit).all()
+            Product.is_active).order_by(Product.name).offset(skip).limit(limit).all()
 
     def search_by_name(self, db: Session, *, name: str) -> List[Product]:
         return db.query(Product).filter(Product.name.ilike(f"%{name}%")).all()

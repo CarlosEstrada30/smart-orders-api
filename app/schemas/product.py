@@ -1,6 +1,7 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
+from .product_route_price import ProductRoutePriceSimpleResponse
 
 
 class ProductBase(BaseModel):
@@ -29,6 +30,7 @@ class ProductResponse(ProductBase):
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
+    route_prices: Optional[List[ProductRoutePriceSimpleResponse]] = None  # Lista de precios por ruta
 
     class Config:
         from_attributes = True

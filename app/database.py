@@ -3,12 +3,12 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.exc import OperationalError, DisconnectionError
-import os
 import time
 import logging
 from .config import settings
 
 logger = logging.getLogger(__name__)
+
 
 # Configuración específica para producción en Render
 def get_engine_config():
@@ -26,13 +26,13 @@ def get_engine_config():
             "application_name": "smart-orders-api"
         }
     }
-    
+
     # Configuraciones específicas para producción (Render)
     if settings.is_production:
         config["connect_args"].update({
             "sslmode": settings.DB_SSL_MODE if settings.DB_SSL_MODE != "prefer" else "require",
         })
-        
+
         # Agregar certificados SSL si están configurados
         if settings.DB_SSL_CERT:
             config["connect_args"]["sslcert"] = settings.DB_SSL_CERT
@@ -40,7 +40,7 @@ def get_engine_config():
             config["connect_args"]["sslkey"] = settings.DB_SSL_KEY
         if settings.DB_SSL_ROOT_CERT:
             config["connect_args"]["sslrootcert"] = settings.DB_SSL_ROOT_CERT
-            
+
         # Pool más conservador para producción
         config["pool_size"] = min(3, settings.DB_POOL_SIZE)
         config["max_overflow"] = min(7, settings.DB_MAX_OVERFLOW)
@@ -49,8 +49,9 @@ def get_engine_config():
         # Pool más pequeño para desarrollo local para evitar "too many clients"
         config["pool_size"] = min(2, settings.DB_POOL_SIZE)
         config["max_overflow"] = min(3, settings.DB_MAX_OVERFLOW)
-    
+
     return config
+
 
 # Crear engine con configuración apropiada
 engine_config = get_engine_config()
@@ -72,7 +73,7 @@ def get_db():
     """
     max_retries = 3
     retry_delay = 1  # segundos
-    
+
     db = None
     for attempt in range(max_retries):
         try:
@@ -95,7 +96,7 @@ def get_db():
                 db.close()
             logger.error(f"Error inesperado en get_db: {e}")
             raise
-    
+
     try:
         yield db
     finally:
