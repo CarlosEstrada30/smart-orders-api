@@ -314,7 +314,7 @@ class OrdersReportGenerator:
             elements.append(Paragraph(client_info, self.styles['ClientInfo']))
 
         # Crear tabla compacta para todas las órdenes del cliente
-        headers = ['No. Orden', 'Fecha', 'Estado', 'Productos', 'Total']
+        headers = ['No. Orden', 'Estado', 'Productos', 'Total']
         table_data = [headers]
 
         for order in orders:
@@ -349,9 +349,11 @@ class OrdersReportGenerator:
                 'cancelled': 'Cancelado'
             }.get(order.status.value, order.status.value.title())
 
+            # Crear número de orden con fecha debajo
+            order_number_with_date = f"{order.order_number}<br/><font size='6'>{order.created_at.strftime('%d/%m/%Y')}</font>"
+            
             row = [
-                order.order_number,
-                order.created_at.strftime('%d/%m/%Y'),
+                Paragraph(order_number_with_date, self.styles['CompactText']),
                 status_text,
                 Paragraph(products_text, self.styles['CompactText']),
                 f"Q {order.total_amount:,.2f}"
@@ -359,7 +361,7 @@ class OrdersReportGenerator:
             table_data.append(row)
 
         # Crear tabla de órdenes (expandir columna de productos para mostrar precios)
-        col_widths = [2.6 * cm, 1.8 * cm, 1.8 * cm, 9.0 * cm, 1.8 * cm]
+        col_widths = [2.6 * cm, 1.8 * cm, 10.0 * cm, 1.8 * cm]
         orders_table = Table(table_data, colWidths=col_widths)
 
         table_style = [
@@ -375,9 +377,9 @@ class OrdersReportGenerator:
             # Data rows
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -1), 7),  # Reducido de 8 a 7
-            ('ALIGN', (0, 1), (1, -1), 'CENTER'),  # No. Orden y Fecha centrados
-            ('ALIGN', (2, 1), (2, -1), 'CENTER'),  # Estado centrado
-            ('ALIGN', (4, 1), (4, -1), 'RIGHT'),   # Total a la derecha
+            ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # No. Orden centrado
+            ('ALIGN', (1, 1), (1, -1), 'CENTER'),  # Estado centrado
+            ('ALIGN', (3, 1), (3, -1), 'RIGHT'),   # Total a la derecha
             ('VALIGN', (0, 1), (-1, -1), 'TOP'),
 
             # Borders
@@ -411,13 +413,6 @@ class OrdersReportGenerator:
     def _create_route_consolidation_section(self, orders: List[Order]):
         """Crea la sección de consolidado de rutas"""
         elements = []
-
-        # Línea separadora
-        line_table = Table([['', '']], colWidths=[16 * cm])
-        line_table.setStyle(TableStyle([
-            ('LINEABOVE', (0, 0), (-1, -1), 2, colors.Color(0.4, 0.4, 0.4)),
-        ]))
-        elements.append(line_table)
 
         elements.append(Spacer(1, 2 * mm))
         elements.append(
@@ -572,13 +567,9 @@ class OrdersReportGenerator:
         """Crea la sección de resumen general"""
         elements = []
 
-        # Línea separadora
-        line_table = Table([['', '']], colWidths=[16 * cm])
-        line_table.setStyle(TableStyle([
-            ('LINEABOVE', (0, 0), (-1, -1), 2, colors.Color(0.4, 0.4, 0.4)),
-        ]))
-        elements.append(line_table)
-
+        # Salto de página antes del resumen general
+        elements.append(PageBreak())
+        
         elements.append(Spacer(1, 2 * mm))  # Reducido de 3mm a 2mm
         elements.append(
             Paragraph(

@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from .database import engine
 from .models import Base
-from .api.v1 import users, clients, products, orders, routes, auth, invoices, inventory, tenants, settings, product_route_prices
+from .api.v1 import users, clients, products, orders, routes, auth, invoices, inventory, tenants, settings, product_route_prices, production
 import os
 
 # IMPORTANTE: No crear tablas automáticamente en producción
@@ -42,6 +42,7 @@ app.include_router(inventory.router, prefix="/api/v1")
 app.include_router(tenants.router, prefix="/api/v1")
 app.include_router(settings.router, prefix="/api/v1")
 app.include_router(product_route_prices.router, prefix="/api/v1")
+app.include_router(production.router, prefix="/api/v1/production")
 
 
 @app.get("/")
