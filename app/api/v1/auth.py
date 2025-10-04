@@ -67,7 +67,8 @@ def get_tenant_db(
         if db:
             db.close()
         raise
-    except Exception:
+    except Exception as e:
+        print(e)
         # Manejar otros errores
         if db:
             db.close()

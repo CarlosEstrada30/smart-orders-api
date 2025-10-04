@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 from datetime import datetime
 
@@ -10,6 +10,13 @@ class ClientBase(BaseModel):
     nit: Optional[str] = None
     address: Optional[str] = None
     is_active: bool = True
+
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_email(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
 
 
 class ClientCreate(ClientBase):
@@ -23,6 +30,13 @@ class ClientUpdate(BaseModel):
     nit: Optional[str] = None
     address: Optional[str] = None
     is_active: Optional[bool] = None
+
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_email(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
 
 
 class ClientResponse(ClientBase):
