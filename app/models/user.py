@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
+import uuid
 from ..database import Base
 
 
@@ -22,6 +23,7 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)
+    token = Column(String, unique=True, index=True, nullable=False, default=lambda: str(uuid.uuid4()))
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
     role = Column(Enum(UserRole), default=UserRole.EMPLOYEE, nullable=True)

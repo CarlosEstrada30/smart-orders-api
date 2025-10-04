@@ -9,6 +9,7 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+    user: Optional[dict] = None
     tenant_id: Optional[int] = None
     tenant_schema: Optional[str] = None
 

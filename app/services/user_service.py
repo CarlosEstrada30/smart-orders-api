@@ -1,6 +1,7 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
+import uuid
 from ..repositories.user_repository import UserRepository
 from ..schemas.user import UserCreate, UserUpdate
 from ..models.user import User
@@ -48,6 +49,7 @@ class UserService:
         hashed_password = self.get_password_hash(user.password)
         user_data = user.model_dump()
         user_data["hashed_password"] = hashed_password
+        user_data["token"] = str(uuid.uuid4())  # Generate UUID token
         del user_data["password"]
 
         # Create user directly with the prepared data

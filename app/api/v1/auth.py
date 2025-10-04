@@ -145,6 +145,16 @@ def login(
             minutes=auth_service.access_token_expire_minutes)
         token_data = {
             "sub": user.email,
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+                "full_name": user.full_name,
+                "token": user.token,
+                "role": user.role.value if user.role else "employee",
+                "is_active": user.is_active,
+                "is_superuser": user.is_superuser
+            },
             "tenant": {
                 "tenant_schema": "public"
             }
@@ -192,6 +202,16 @@ def login(
                 minutes=auth_service.access_token_expire_minutes)
             token_data = {
                 "sub": user.email,
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "username": user.username,
+                    "full_name": user.full_name,
+                    "token": user.token,
+                    "role": user.role.value if user.role else "employee",
+                    "is_active": user.is_active,
+                    "is_superuser": user.is_superuser
+                },
                 "tenant": {
                     "tenant_id": tenant.id,
                     "tenant_schema": tenant.schema_name,
@@ -220,6 +240,7 @@ def get_current_user_info(
         "email": current_user.email,
         "username": current_user.username,
         "full_name": current_user.full_name,
+        "token": current_user.token,
         "is_active": current_user.is_active,
         "is_superuser": current_user.is_superuser,
         "role": current_user.role.value if current_user.role else "employee"

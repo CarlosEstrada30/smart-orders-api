@@ -42,6 +42,9 @@ class AuthService:
             if email is None:
                 return None
 
+            # Extraer información del usuario del token (estructura anidada)
+            user_info = payload.get("user", {})
+
             # Extraer información del tenant del token (estructura anidada)
             tenant_info = payload.get("tenant", {})
             tenant_id = tenant_info.get("tenant_id")
@@ -49,6 +52,7 @@ class AuthService:
 
             token_data = TokenData(
                 email=email,
+                user=user_info,
                 tenant_id=tenant_id,
                 tenant_schema=tenant_schema
             )
