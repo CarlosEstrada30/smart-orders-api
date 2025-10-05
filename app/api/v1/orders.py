@@ -695,7 +695,8 @@ def download_orders_report_pdf(
         db: Session = Depends(get_tenant_db),
         order_service: OrderService = Depends(get_order_service),
         settings_service: SettingsService = Depends(get_settings_service),
-        current_user: User = Depends(get_current_active_user)):
+        current_user: User = Depends(get_current_active_user),
+        request: Request = None):
     """Download orders report PDF with filters
 
     Genera un PDF con múltiples órdenes agrupadas por cliente.
@@ -733,10 +734,13 @@ def download_orders_report_pdf(
         report_title = _generate_report_title(
             status_filter, route_id, date_from, date_to, db)
 
+        # Get client timezone and pass to PDF generator
+        client_timezone = get_request_timezone(request) if request else None
+
         # Generate PDF buffer
         report_generator = OrdersReportGenerator()
         pdf_buffer = report_generator.generate_report_buffer(
-            raw_orders, settings, report_title)
+            raw_orders, settings, report_title, client_timezone)
 
         # Set filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')

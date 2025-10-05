@@ -134,7 +134,7 @@ class OrdersReportGenerator:
         story = []
 
         # Header con logo y información de empresa
-        story.extend(self._create_report_header(settings, title, len(orders)))
+        story.extend(self._create_report_header(settings, title, len(orders), client_timezone))
         story.append(Spacer(1, 3 * mm))  # Reducido de 6mm a 3mm
 
         # Agrupar órdenes por cliente
@@ -155,7 +155,7 @@ class OrdersReportGenerator:
         story.append(Spacer(1, 2 * mm))  # Reducido de 4mm a 2mm
 
         # Footer
-        story.extend(self._create_report_footer(settings))
+        story.extend(self._create_report_footer(settings, client_timezone))
 
         doc.build(story)
         return output_path
@@ -177,7 +177,7 @@ class OrdersReportGenerator:
         story = []
 
         # Header con logo y información de empresa
-        story.extend(self._create_report_header(settings, title, len(orders)))
+        story.extend(self._create_report_header(settings, title, len(orders), client_timezone))
         story.append(Spacer(1, 3 * mm))  # Reducido de 6mm a 3mm
 
         # Agrupar órdenes por cliente
@@ -198,7 +198,7 @@ class OrdersReportGenerator:
         story.append(Spacer(1, 2 * mm))  # Reducido de 4mm a 2mm
 
         # Footer
-        story.extend(self._create_report_footer(settings))
+        story.extend(self._create_report_footer(settings, client_timezone))
 
         doc.build(story)
         buffer.seek(0)
@@ -208,7 +208,8 @@ class OrdersReportGenerator:
             self,
             settings: Settings,
             title: str,
-            total_orders: int):
+            total_orders: int,
+            client_timezone: Optional[str] = None):
         """Crea el header del reporte con logo y información de empresa"""
         elements = []
 
@@ -270,7 +271,11 @@ class OrdersReportGenerator:
         elements.append(Paragraph(title.upper(), self.styles['ReportTitle']))
 
         # Información del reporte
-        report_info = f"Total de órdenes: {total_orders} | Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        current_time = datetime.now()
+        if client_timezone:
+            from ..utils.timezone import convert_utc_to_client_timezone
+            current_time = convert_utc_to_client_timezone(current_time, client_timezone)
+        report_info = f"Total de órdenes: {total_orders} | Fecha: {current_time.strftime('%d/%m/%Y %H:%M')}"
         elements.append(
             Paragraph(
                 f'<para align="center">{report_info}</para>',
@@ -352,8 +357,8 @@ class OrdersReportGenerator:
             }.get(order.status.value, order.status.value.title())
 
             # Convert order date to client timezone if provided
-            if None:
-                created_at_client = convert_utc_to_None(order.created_at, None)
+            if client_timezone:
+                created_at_client = convert_utc_to_client_timezone(order.created_at, client_timezone)
             else:
                 created_at_client = order.created_at
                 
@@ -652,15 +657,19 @@ class OrdersReportGenerator:
 
         return elements
 
-    def _create_report_footer(self, settings: Settings):
+    def _create_report_footer(self, settings: Settings, client_timezone: Optional[str] = None):
         """Crea el footer del reporte"""
         elements = []
 
         elements.append(Spacer(1, 3 * mm))  # Reducido de 6mm a 3mm
 
         # Footer con información de contacto y timestamp
+        current_time = datetime.now()
+        if client_timezone:
+            from ..utils.timezone import convert_utc_to_client_timezone
+            current_time = convert_utc_to_client_timezone(current_time, client_timezone)
         footer_parts = [
-            f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}"]
+            f"Generado: {current_time.strftime('%d/%m/%Y %H:%M')}"]
 
         if settings.phone:
             footer_parts.append(f"Tel: {settings.phone}")
