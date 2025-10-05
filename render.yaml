@@ -18,7 +18,7 @@ services:
     # Variables de entorno
     envVars:
       - key: PYTHON_VERSION
-        value: 3.8
+        value: 3.10
       - key: PIPENV_VENV_IN_PROJECT
         value: 1
       - key: PIPENV_SKIP_LOCK

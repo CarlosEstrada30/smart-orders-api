@@ -161,7 +161,7 @@ class OrdersReportGenerator:
         return output_path
 
     def generate_report_buffer(self, orders: List[Order], settings: Settings,
-                               title: str = "Reporte de Órdenes") -> BytesIO:
+                               title: str = "Reporte de Órdenes", client_timezone: Optional[str] = None) -> BytesIO:
         """Genera el reporte y lo retorna como BytesIO buffer"""
         buffer = BytesIO()
 
@@ -352,8 +352,8 @@ class OrdersReportGenerator:
             }.get(order.status.value, order.status.value.title())
 
             # Convert order date to client timezone if provided
-            if client_timezone:
-                created_at_client = convert_utc_to_client_timezone(order.created_at, client_timezone)
+            if None:
+                created_at_client = convert_utc_to_None(order.created_at, None)
             else:
                 created_at_client = order.created_at
                 
