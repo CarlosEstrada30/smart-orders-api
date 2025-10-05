@@ -6,9 +6,11 @@ from reportlab.lib.units import inch, cm
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from datetime import datetime
 from io import BytesIO
+from typing import Optional
 
 from ..models.invoice import Invoice
 from ..schemas.invoice import CompanyInfo
+from ..utils.timezone import convert_utc_to_client_timezone, format_datetime_for_client
 
 
 class InvoicePDFGenerator:
@@ -93,7 +95,8 @@ class InvoicePDFGenerator:
             self,
             invoice: Invoice,
             company_info: CompanyInfo,
-            output_path: str) -> str:
+            output_path: str,
+            client_timezone: Optional[str] = None) -> str:
         """Generate a professional invoice PDF"""
 
         # Create PDF document
@@ -126,7 +129,7 @@ class InvoicePDFGenerator:
         story.append(Spacer(1, 0.3 * inch))
 
         # Footer
-        story.extend(self._create_footer(invoice, company_info))
+        story.extend(self._create_footer(invoice, company_info, client_timezone))
 
         # Build PDF
         doc.build(story)
@@ -359,7 +362,8 @@ class InvoicePDFGenerator:
     def _create_footer(
             self,
             invoice: Invoice,
-            company_info: CompanyInfo) -> list:
+            company_info: CompanyInfo,
+            client_timezone: Optional[str] = None) -> list:
         """Create footer section"""
         elements = []
 
@@ -404,7 +408,14 @@ class InvoicePDFGenerator:
                 thank_you_style))
 
         # Generation timestamp
-        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M")
+        if client_timezone:
+            # Convert current time to client timezone
+            current_time = datetime.now()
+            client_time = convert_utc_to_client_timezone(current_time, client_timezone)
+            timestamp = client_time.strftime("%d/%m/%Y %H:%M")
+        else:
+            timestamp = datetime.now().strftime("%d/%m/%Y %H:%M")
+        
         elements.append(
             Paragraph(
                 f"Documento generado el {timestamp}",
@@ -415,7 +426,8 @@ class InvoicePDFGenerator:
     def generate_pdf_buffer(
             self,
             invoice: Invoice,
-            company_info: CompanyInfo) -> BytesIO:
+            company_info: CompanyInfo,
+            client_timezone: Optional[str] = None) -> BytesIO:
         """Generate PDF and return as BytesIO buffer"""
         buffer = BytesIO()
 
@@ -439,7 +451,7 @@ class InvoicePDFGenerator:
         story.append(Spacer(1, 0.3 * inch))
         story.extend(self._create_payment_section(invoice))
         story.append(Spacer(1, 0.3 * inch))
-        story.extend(self._create_footer(invoice, company_info))
+        story.extend(self._create_footer(invoice, company_info, client_timezone))
 
         # Build PDF
         doc.build(story)

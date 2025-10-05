@@ -8,9 +8,11 @@ from datetime import datetime
 import requests
 from io import BytesIO
 from PIL import Image as PILImage
+from typing import Optional
 
 from ..models.order import Order
 from ..models.settings import Settings
+from ..utils.timezone import convert_utc_to_client_timezone
 
 
 class CompactReceiptGenerator:
@@ -89,7 +91,8 @@ class CompactReceiptGenerator:
             self,
             order: Order,
             settings: Settings,
-            output_path: str) -> str:
+            output_path: str,
+            client_timezone: Optional[str] = None) -> str:
         """Genera un comprobante compacto de orden"""
         doc = SimpleDocTemplate(
             output_path,
@@ -114,7 +117,7 @@ class CompactReceiptGenerator:
         story.append(Spacer(1, 4 * mm))
 
         # Información del pedido y cliente en layout limpio
-        story.extend(self._create_clean_order_client_info(order))
+        story.extend(self._create_clean_order_client_info(order, client_timezone))
         story.append(Spacer(1, 4 * mm))
 
         # Tabla de productos compacta
@@ -126,7 +129,7 @@ class CompactReceiptGenerator:
         story.append(Spacer(1, 4 * mm))
 
         # Footer mínimo
-        story.extend(self._create_minimal_footer(settings))
+        story.extend(self._create_minimal_footer(settings, client_timezone))
 
         doc.build(story)
         return output_path
@@ -134,7 +137,8 @@ class CompactReceiptGenerator:
     def generate_receipt_buffer(
             self,
             order: Order,
-            settings: Settings) -> BytesIO:
+            settings: Settings,
+            client_timezone: Optional[str] = None) -> BytesIO:
         """Genera el comprobante compacto y lo retorna como BytesIO buffer"""
         buffer = BytesIO()
 
@@ -161,7 +165,7 @@ class CompactReceiptGenerator:
         story.append(Spacer(1, 4 * mm))
 
         # Información del pedido y cliente en layout limpio
-        story.extend(self._create_clean_order_client_info(order))
+        story.extend(self._create_clean_order_client_info(order, client_timezone))
         story.append(Spacer(1, 4 * mm))
 
         # Tabla de productos compacta
@@ -173,7 +177,7 @@ class CompactReceiptGenerator:
         story.append(Spacer(1, 4 * mm))
 
         # Footer mínimo
-        story.extend(self._create_minimal_footer(settings))
+        story.extend(self._create_minimal_footer(settings, client_timezone))
 
         doc.build(story)
         buffer.seek(0)
@@ -238,11 +242,19 @@ class CompactReceiptGenerator:
 
         return elements
 
-    def _create_clean_order_client_info(self, order: Order):
+    def _create_clean_order_client_info(self, order: Order, client_timezone: Optional[str] = None):
         """Crea un layout limpio para información del pedido y cliente"""
         elements = []
 
         client = order.client
+
+        # Convert order dates to client timezone if provided
+        if client_timezone:
+            created_at_client = convert_utc_to_client_timezone(order.created_at, client_timezone)
+            updated_at_client = convert_utc_to_client_timezone(order.updated_at, client_timezone) if order.updated_at else None
+        else:
+            created_at_client = order.created_at
+            updated_at_client = order.updated_at
 
         # Crear tabla simple de dos columnas sin colores de fondo
         order_client_data = [
@@ -251,9 +263,9 @@ class CompactReceiptGenerator:
              Paragraph("<b>INFORMACIÓN DEL CLIENTE</b>", self.styles['NormalText'])],
             # Data rows
             [f"No. Pedido: {order.order_number}", f"Cliente: {client.name}"],
-            [f"Fecha: {order.created_at.strftime('%d/%m/%Y')}",
+            [f"Fecha: {created_at_client.strftime('%d/%m/%Y')}",
              f"Email: {client.email or 'No proporcionado'}"],
-            [f"Hora: {order.created_at.strftime('%H:%M')}",
+            [f"Hora: {created_at_client.strftime('%H:%M')}",
              f"Teléfono: {client.phone or 'No proporcionado'}"],
             ["", f"Dirección: {client.address or 'No proporcionada'}"]
         ]
@@ -411,7 +423,7 @@ class CompactReceiptGenerator:
 
         return elements
 
-    def _create_minimal_footer(self, settings: Settings):
+    def _create_minimal_footer(self, settings: Settings, client_timezone: Optional[str] = None):
         """Crea un footer mínimo y compacto"""
         elements = []
 
@@ -425,8 +437,15 @@ class CompactReceiptGenerator:
             elements.append(Paragraph(note, self.styles['NormalText']))
 
         # Información de contacto y timestamp en una línea
-        footer_parts = [
-            f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}"]
+        if client_timezone:
+            # Convert current time to client timezone
+            current_time = datetime.now()
+            client_time = convert_utc_to_client_timezone(current_time, client_timezone)
+            timestamp = client_time.strftime('%d/%m/%Y %H:%M')
+        else:
+            timestamp = datetime.now().strftime('%d/%m/%Y %H:%M')
+            
+        footer_parts = [f"Generado: {timestamp}"]
 
         if settings.phone:
             footer_parts.append(f"Tel: {settings.phone}")

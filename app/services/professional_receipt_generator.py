@@ -8,9 +8,11 @@ from datetime import datetime
 import requests
 from io import BytesIO
 from PIL import Image as PILImage
+from typing import Optional
 
 from ..models.order import Order
 from ..models.settings import Settings
+from ..utils.timezone import convert_utc_to_client_timezone
 
 
 class ProfessionalReceiptGenerator:
@@ -100,7 +102,8 @@ class ProfessionalReceiptGenerator:
             self,
             order: Order,
             settings: Settings,
-            output_path: str) -> str:
+            output_path: str,
+            client_timezone: Optional[str] = None) -> str:
         """Genera un comprobante profesional de orden"""
         doc = SimpleDocTemplate(
             output_path,
@@ -125,7 +128,7 @@ class ProfessionalReceiptGenerator:
         story.append(Spacer(1, 10 * mm))
 
         # Información del pedido
-        story.extend(self._create_order_info(order))
+        story.extend(self._create_order_info(order, client_timezone))
         story.append(Spacer(1, 8 * mm))
 
         # Información del cliente
@@ -141,7 +144,7 @@ class ProfessionalReceiptGenerator:
         story.append(Spacer(1, 15 * mm))
 
         # Footer con notas importantes
-        story.extend(self._create_footer(settings))
+        story.extend(self._create_footer(settings, client_timezone))
 
         doc.build(story)
         return output_path
@@ -149,7 +152,8 @@ class ProfessionalReceiptGenerator:
     def generate_receipt_buffer(
             self,
             order: Order,
-            settings: Settings) -> BytesIO:
+            settings: Settings,
+            client_timezone: Optional[str] = None) -> BytesIO:
         """Genera el comprobante y lo retorna como BytesIO buffer"""
         buffer = BytesIO()
 
@@ -176,7 +180,7 @@ class ProfessionalReceiptGenerator:
         story.append(Spacer(1, 10 * mm))
 
         # Información del pedido
-        story.extend(self._create_order_info(order))
+        story.extend(self._create_order_info(order, client_timezone))
         story.append(Spacer(1, 8 * mm))
 
         # Información del cliente
@@ -192,7 +196,7 @@ class ProfessionalReceiptGenerator:
         story.append(Spacer(1, 15 * mm))
 
         # Footer con notas importantes
-        story.extend(self._create_footer(settings))
+        story.extend(self._create_footer(settings, client_timezone))
 
         doc.build(story)
         buffer.seek(0)
@@ -297,7 +301,7 @@ class ProfessionalReceiptGenerator:
             print(f"Error loading logo: {e}")
             return None
 
-    def _create_order_info(self, order: Order):
+    def _create_order_info(self, order: Order, client_timezone: Optional[str] = None):
         """Crea la sección con información del pedido"""
         elements = []
 
@@ -306,17 +310,25 @@ class ProfessionalReceiptGenerator:
                 "INFORMACIÓN DEL PEDIDO",
                 self.styles['SectionTitle']))
 
+        # Convert order dates to client timezone if provided
+        if client_timezone:
+            created_at_client = convert_utc_to_client_timezone(order.created_at, client_timezone)
+            updated_at_client = convert_utc_to_client_timezone(order.updated_at, client_timezone) if order.updated_at else None
+        else:
+            created_at_client = order.created_at
+            updated_at_client = order.updated_at
+
         # Crear tabla con información del pedido
         order_data = [
             ["Número de Pedido:", order.order_number],
-            ["Fecha:", order.created_at.strftime('%d de %B de %Y')],
-            ["Hora:", order.created_at.strftime('%I:%M %p')],
+            ["Fecha:", created_at_client.strftime('%d de %B de %Y')],
+            ["Hora:", created_at_client.strftime('%I:%M %p')],
             ["Estado:", self._format_status(order.status.value)],
         ]
 
-        if order.updated_at and order.updated_at != order.created_at:
+        if updated_at_client and updated_at_client != created_at_client:
             order_data.append(["Última Actualización:",
-                               order.updated_at.strftime('%d/%m/%Y %I:%M %p')])
+                               updated_at_client.strftime('%d/%m/%Y %I:%M %p')])
 
         order_table = Table(order_data, colWidths=[4 * cm, 8 * cm])
         order_table.setStyle(TableStyle([
@@ -489,7 +501,7 @@ class ProfessionalReceiptGenerator:
 
         return elements
 
-    def _create_footer(self, settings: Settings):
+    def _create_footer(self, settings: Settings, client_timezone: Optional[str] = None):
         """Crea el footer con información importante"""
         elements = []
 
@@ -521,7 +533,14 @@ class ProfessionalReceiptGenerator:
                 self.styles['CompanyInfo']))
 
         # Timestamp de generación
-        timestamp = f"Comprobante generado el {datetime.now().strftime('%d de %B de %Y a las %I:%M %p')}"
+        if client_timezone:
+            # Convert current time to client timezone
+            current_time = datetime.now()
+            client_time = convert_utc_to_client_timezone(current_time, client_timezone)
+            timestamp = f"Comprobante generado el {client_time.strftime('%d de %B de %Y a las %I:%M %p')}"
+        else:
+            timestamp = f"Comprobante generado el {datetime.now().strftime('%d de %B de %Y a las %I:%M %p')}"
+        
         elements.append(
             Paragraph(
                 f'<para align="center">{timestamp}</para>',

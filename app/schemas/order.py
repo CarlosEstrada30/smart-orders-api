@@ -4,6 +4,7 @@ from datetime import datetime
 from ..models.order import OrderStatus
 from .client import ClientResponse
 from .route import RouteResponse
+from .base import TimezoneAwareBaseModel, TimestampMixin, create_timezone_aware_datetime_field
 
 
 class OrderItemBase(BaseModel):
@@ -50,18 +51,20 @@ class OrderUpdate(BaseModel):
     items: Optional[List[OrderItemCreate]] = None
 
 
-class OrderResponse(OrderBase):
+class OrderResponse(OrderBase, TimezoneAwareBaseModel):
     id: int
     order_number: str
     total_amount: float
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+    created_at: datetime = create_timezone_aware_datetime_field(
+        description="Fecha y hora de creación (en zona horaria del cliente)"
+    )
+    updated_at: Optional[datetime] = create_timezone_aware_datetime_field(
+        default=None,
+        description="Fecha y hora de última actualización (en zona horaria del cliente)"
+    )
     items: List[OrderItemResponse] = []
     client: Optional[ClientResponse] = None
     route: Optional[RouteResponse] = None
-
-    class Config:
-        from_attributes = True
 
 
 # Analytics Schemas

@@ -5,7 +5,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Optional
 import requests
 from io import BytesIO
 from PIL import Image as PILImage
@@ -13,6 +13,7 @@ from collections import defaultdict
 
 from ..models.order import Order
 from ..models.settings import Settings
+from ..utils.timezone import convert_utc_to_client_timezone
 
 
 class OrdersReportGenerator:
@@ -118,7 +119,8 @@ class OrdersReportGenerator:
             orders: List[Order],
             settings: Settings,
             output_path: str,
-            title: str = "Reporte de Órdenes") -> str:
+            title: str = "Reporte de Órdenes",
+            client_timezone: Optional[str] = None) -> str:
         """Genera un reporte PDF de múltiples órdenes agrupadas por cliente"""
         doc = SimpleDocTemplate(
             output_path,
@@ -140,7 +142,7 @@ class OrdersReportGenerator:
 
         # Generar contenido por cliente
         for client, client_orders in orders_by_client.items():
-            story.extend(self._create_client_section(client, client_orders))
+            story.extend(self._create_client_section(client, client_orders, client_timezone))
             story.append(Spacer(1, 2 * mm))  # Reducido de 4mm a 2mm
 
         # Consolidado de rutas (antes del resumen general) - Nueva página
@@ -183,7 +185,7 @@ class OrdersReportGenerator:
 
         # Generar contenido por cliente
         for client, client_orders in orders_by_client.items():
-            story.extend(self._create_client_section(client, client_orders))
+            story.extend(self._create_client_section(client, client_orders, client_timezone))
             story.append(Spacer(1, 2 * mm))  # Reducido de 4mm a 2mm
 
         # Consolidado de rutas (antes del resumen general) - Nueva página
@@ -294,7 +296,7 @@ class OrdersReportGenerator:
 
         return sorted_clients
 
-    def _create_client_section(self, client, orders: List[Order]):
+    def _create_client_section(self, client, orders: List[Order], client_timezone: Optional[str] = None):
         """Crea la sección de un cliente con todas sus órdenes"""
         elements = []
 
@@ -349,8 +351,14 @@ class OrdersReportGenerator:
                 'cancelled': 'Cancelado'
             }.get(order.status.value, order.status.value.title())
 
+            # Convert order date to client timezone if provided
+            if client_timezone:
+                created_at_client = convert_utc_to_client_timezone(order.created_at, client_timezone)
+            else:
+                created_at_client = order.created_at
+                
             # Crear número de orden con fecha debajo
-            order_number_with_date = f"{order.order_number}<br/><font size='6'>{order.created_at.strftime('%d/%m/%Y')}</font>"
+            order_number_with_date = f"{order.order_number}<br/><font size='6'>{created_at_client.strftime('%d/%m/%Y')}</font>"
 
             row = [
                 Paragraph(order_number_with_date, self.styles['CompactText']),

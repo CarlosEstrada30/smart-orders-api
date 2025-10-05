@@ -25,6 +25,7 @@ requests = "*"
 boto3 = "*"
 pandas = "*"
 openpyxl = "*"
+pytz = "*"
 
 [dev-packages]
 pytest = "*"

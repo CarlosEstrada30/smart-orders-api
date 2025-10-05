@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from .database import engine
 from .models import Base
+from .middleware import TimezoneMiddleware
 from .api.v1 import (
     users, clients, products, orders, routes, auth,
     invoices, inventory, tenants, settings,
@@ -33,6 +34,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add timezone middleware
+app.add_middleware(TimezoneMiddleware)
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1")

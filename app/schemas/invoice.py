@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional
 from datetime import datetime
 from ..models.invoice import InvoiceStatus, PaymentMethod
+from .base import TimezoneAwareBaseModel, create_timezone_aware_datetime_field
 
 
 class InvoiceBase(BaseModel):
@@ -42,7 +43,7 @@ class InvoiceUpdate(BaseModel):
         return v
 
 
-class InvoiceResponse(InvoiceBase):
+class InvoiceResponse(InvoiceBase, TimezoneAwareBaseModel):
     id: int
     invoice_number: str
     status: InvoiceStatus
@@ -57,9 +58,15 @@ class InvoiceResponse(InvoiceBase):
     # FEL (Facturación Electrónica en Línea) - Guatemala
     fel_uuid: Optional[str] = None
     dte_number: Optional[str] = None
-    fel_authorization_date: Optional[datetime] = None
+    fel_authorization_date: Optional[datetime] = create_timezone_aware_datetime_field(
+        default=None,
+        description="Fecha de autorización FEL (en zona horaria del cliente)"
+    )
     fel_xml_path: Optional[str] = None
-    fel_certification_date: Optional[datetime] = None
+    fel_certification_date: Optional[datetime] = create_timezone_aware_datetime_field(
+        default=None,
+        description="Fecha de certificación FEL (en zona horaria del cliente)"
+    )
     fel_certifier: Optional[str] = None
     fel_series: Optional[str] = None
     fel_number: Optional[str] = None
@@ -67,19 +74,26 @@ class InvoiceResponse(InvoiceBase):
     requires_fel: bool = True
 
     # Dates
-    issue_date: datetime
-    paid_date: Optional[datetime] = None
+    issue_date: datetime = create_timezone_aware_datetime_field(
+        description="Fecha de emisión (en zona horaria del cliente)"
+    )
+    paid_date: Optional[datetime] = create_timezone_aware_datetime_field(
+        default=None,
+        description="Fecha de pago (en zona horaria del cliente)"
+    )
 
     # PDF tracking
     pdf_generated: bool
     pdf_path: Optional[str] = None
 
     # Timestamps
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
+    created_at: datetime = create_timezone_aware_datetime_field(
+        description="Fecha y hora de creación (en zona horaria del cliente)"
+    )
+    updated_at: Optional[datetime] = create_timezone_aware_datetime_field(
+        default=None,
+        description="Fecha y hora de última actualización (en zona horaria del cliente)"
+    )
 
 
 class InvoiceListResponse(BaseModel):

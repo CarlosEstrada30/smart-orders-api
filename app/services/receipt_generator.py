@@ -4,9 +4,11 @@ from reportlab.lib.units import cm
 from reportlab.lib import colors
 from datetime import datetime
 from io import BytesIO
+from typing import Optional
 
 from ..models.order import Order
 from ..schemas.invoice import CompanyInfo
+from ..utils.timezone import convert_utc_to_client_timezone
 
 
 class ReceiptGenerator:
@@ -20,12 +22,13 @@ class ReceiptGenerator:
             self,
             order: Order,
             company_info: CompanyInfo,
-            output_path: str) -> str:
+            output_path: str,
+            client_timezone: Optional[str] = None) -> str:
         """Generate a simple order receipt PDF"""
 
         # Create PDF
         c = canvas.Canvas(output_path, pagesize=A4)
-        self._draw_receipt(c, order, company_info)
+        self._draw_receipt(c, order, company_info, client_timezone)
         c.save()
 
         return output_path
@@ -33,13 +36,14 @@ class ReceiptGenerator:
     def generate_receipt_buffer(
             self,
             order: Order,
-            company_info: CompanyInfo) -> BytesIO:
+            company_info: CompanyInfo,
+            client_timezone: Optional[str] = None) -> BytesIO:
         """Generate receipt and return as BytesIO buffer"""
         buffer = BytesIO()
 
         # Create PDF
         c = canvas.Canvas(buffer, pagesize=A4)
-        self._draw_receipt(c, order, company_info)
+        self._draw_receipt(c, order, company_info, client_timezone)
         c.save()
 
         buffer.seek(0)
@@ -49,7 +53,8 @@ class ReceiptGenerator:
             self,
             c: canvas.Canvas,
             order: Order,
-            company_info: CompanyInfo):
+            company_info: CompanyInfo,
+            client_timezone: Optional[str] = None):
         """Draw the complete receipt on the canvas"""
 
         # Header
@@ -59,7 +64,7 @@ class ReceiptGenerator:
         self._draw_customer_info(c, order)
 
         # Order details
-        self._draw_order_details(c, order)
+        self._draw_order_details(c, order, client_timezone)
 
         # Items table
         self._draw_items_table(c, order)
@@ -157,7 +162,7 @@ class ReceiptGenerator:
             c.drawString(self.margin + 20, y, line)
             y -= 14
 
-    def _draw_order_details(self, c: canvas.Canvas, order: Order):
+    def _draw_order_details(self, c: canvas.Canvas, order: Order, client_timezone: Optional[str] = None):
         """Draw order details"""
         y = self.height - self.margin - 260
 
@@ -181,10 +186,18 @@ class ReceiptGenerator:
 
         status_color = status_colors.get(order.status.value, colors.black)
 
+        # Convert order dates to client timezone if provided
+        if client_timezone:
+            created_at_client = convert_utc_to_client_timezone(order.created_at, client_timezone)
+            updated_at_client = convert_utc_to_client_timezone(order.updated_at, client_timezone) if order.updated_at else None
+        else:
+            created_at_client = order.created_at
+            updated_at_client = order.updated_at
+
         details_lines = [
             "Estado del Pedido: ",
-            f"Fecha de Creación: {order.created_at.strftime('%d de %B de %Y a las %H:%M')}",
-            f"Última Actualización: {order.updated_at.strftime('%d de %B de %Y a las %H:%M') if order.updated_at else 'N/A'}",
+            f"Fecha de Creación: {created_at_client.strftime('%d de %B de %Y a las %H:%M')}",
+            f"Última Actualización: {updated_at_client.strftime('%d de %B de %Y a las %H:%M') if updated_at_client else 'N/A'}",
             f"Total de Productos: {len(order.items)} artículos",
         ]
 

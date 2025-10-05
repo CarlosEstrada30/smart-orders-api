@@ -1,6 +1,6 @@
 from typing import List, Optional, Union
 from datetime import date, datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from io import BytesIO
@@ -18,6 +18,8 @@ from ...models.order import OrderStatus
 from ..dependencies import get_order_service, get_settings_service
 from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
+from ...utils.date_filters import create_date_range_utc, validate_date_range
+from ...middleware import get_request_timezone
 from ...utils.permissions import can_create_orders, can_view_orders, can_update_delivery_status
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -74,7 +76,8 @@ def get_orders(
             description="Return paginated response with metadata"),
         db: Session = Depends(get_tenant_db),
         order_service: OrderService = Depends(get_order_service),
-        current_user: User = Depends(get_current_active_user)):
+        current_user: User = Depends(get_current_active_user),
+        request: Request = None):
     """Get all orders with optional filters (requires view orders permission)
 
     Filters:
@@ -97,11 +100,16 @@ def get_orders(
         )
 
     # Validate date range
-    if date_from and date_to and date_from > date_to:
-        raise HTTPException(
-            status_code=400,
-            detail="date_from cannot be later than date_to"
-        )
+    validate_date_range(date_from, date_to)
+    
+    # Get client timezone and convert date filters to UTC
+    client_timezone = get_request_timezone(request) if request else None
+    if client_timezone:
+        date_from_utc, date_to_utc = create_date_range_utc(date_from, date_to, client_timezone)
+    else:
+        # Fallback to original dates if no timezone available
+        date_from_utc = date_from
+        date_to_utc = date_to
 
     # Convert status filter to enum if provided
     status_enum = None
@@ -117,15 +125,15 @@ def get_orders(
     # Choose response format based on paginated parameter
     if paginated:
         # Use paginated response with full metadata
-        if any([status_enum, route_id, date_from, date_to, search]):
+        if any([status_enum, route_id, date_from_utc, date_to_utc, search]):
             return order_service.get_orders_paginated(
                 db,
                 skip=skip,
                 limit=limit,
                 status=status_enum,
                 route_id=route_id,
-                date_from=date_from,
-                date_to=date_to,
+                date_from=date_from_utc,
+                date_to=date_to_utc,
                 search=search
             )
         else:
@@ -134,15 +142,15 @@ def get_orders(
                 db, skip=skip, limit=limit)
     else:
         # Backward compatibility: return simple list
-        if any([status_enum, route_id, date_from, date_to, search]):
+        if any([status_enum, route_id, date_from_utc, date_to_utc, search]):
             return order_service.get_orders_with_filters(
                 db,
                 skip=skip,
                 limit=limit,
                 status=status_enum,
                 route_id=route_id,
-                date_from=date_from,
-                date_to=date_to,
+                date_from=date_from_utc,
+                date_to=date_to_utc,
                 search=search
             )
         else:
@@ -371,7 +379,8 @@ def download_order_receipt(
     db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     settings_service: SettingsService = Depends(get_settings_service),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    request: Request = None
 ):
     """Download order receipt/voucher PDF (requires authentication)"""
     try:
@@ -399,9 +408,12 @@ def download_order_receipt(
         if not order_obj:
             raise HTTPException(status_code=404, detail="Order not found")
 
-        # Generate PDF buffer with company settings
+        # Get client timezone and pass to PDF generator
+        client_timezone = get_request_timezone(request) if request else None
+        
+        # Generate PDF buffer with company settings and client timezone
         pdf_buffer = receipt_generator.generate_receipt_buffer(
-            order_obj, settings)
+            order_obj, settings, client_timezone)
 
         # Set filename
         filename = f"comprobante_pedido_{order_obj.order_number}.pdf"
@@ -425,7 +437,8 @@ def preview_order_receipt(
     db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     settings_service: SettingsService = Depends(get_settings_service),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    request: Request = None
 ):
     """Preview order receipt PDF in browser (requires authentication)"""
     try:
@@ -453,9 +466,12 @@ def preview_order_receipt(
         if not order_obj:
             raise HTTPException(status_code=404, detail="Order not found")
 
-        # Generate PDF buffer with company settings
+        # Get client timezone and pass to PDF generator
+        client_timezone = get_request_timezone(request) if request else None
+        
+        # Generate PDF buffer with company settings and client timezone
         pdf_buffer = receipt_generator.generate_receipt_buffer(
-            order_obj, settings)
+            order_obj, settings, client_timezone)
 
         # Return as inline PDF (for preview in browser)
         return StreamingResponse(
@@ -476,7 +492,8 @@ def generate_order_receipt_file(
     db: Session = Depends(get_tenant_db),
     order_service: OrderService = Depends(get_order_service),
     settings_service: SettingsService = Depends(get_settings_service),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
+    request: Request = None
 ):
     """Generate and save order receipt PDF file (requires authentication)"""
     try:
@@ -509,13 +526,16 @@ def generate_order_receipt_file(
         receipts_dir = "receipts"
         os.makedirs(receipts_dir, exist_ok=True)
 
+        # Get client timezone and pass to PDF generator
+        client_timezone = get_request_timezone(request) if request else None
+        
         # Generate filename
         filename = f"comprobante_{order_obj.order_number}_{order_obj.created_at.strftime('%Y%m%d_%H%M%S')}.pdf"
         file_path = os.path.join(receipts_dir, filename)
 
-        # Generate PDF file with company settings
+        # Generate PDF file with company settings and client timezone
         receipt_generator.generate_order_receipt(
-            order_obj, settings, file_path)
+            order_obj, settings, file_path, client_timezone)
 
         return {
             "message": "Receipt generated successfully",
