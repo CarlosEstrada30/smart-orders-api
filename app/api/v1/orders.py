@@ -20,7 +20,7 @@ from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
 from ...utils.date_filters import create_date_range_utc, validate_date_range
 from ...middleware import get_request_timezone
-from ...utils.permissions import can_create_orders, can_view_orders, can_update_delivery_status
+from ...utils.permissions import can_create_orders, can_view_orders, can_update_delivery_status, can_update_stock_required_status
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -180,19 +180,26 @@ def batch_update_order_status(
 ):
     """Update status for multiple orders (requires authentication)"""
     try:
-        # Check permissions
-        if not can_create_orders(current_user):
-            raise HTTPException(
-                status_code=403,
-                detail="No tienes permisos para cambiar el estado de pedidos. Se requiere rol de Vendedor o superior."
-            )
-
-        # Special validation for delivery status
+        # Validación de permisos según el estado
         if batch_request.status == OrderStatus.DELIVERED:
             if not can_update_delivery_status(current_user):
                 raise HTTPException(
                     status_code=403,
                     detail="No tienes permisos para marcar pedidos como entregados. Se requiere rol de Repartidor o superior."
+                )
+        elif batch_request.status in [OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS, OrderStatus.SHIPPED]:
+            # Estados que requieren validación de stock
+            if not can_update_stock_required_status(current_user):
+                raise HTTPException(
+                    status_code=403,
+                    detail="No tienes permisos para cambiar a estados que requieren validación de stock. Se requiere rol de Vendedor o superior."
+                )
+        else:
+            # Para otros cambios de estado (pending, cancelled), requiere permisos básicos
+            if not can_create_orders(current_user):
+                raise HTTPException(
+                    status_code=403,
+                    detail="No tienes permisos para cambiar el estado de pedidos. Se requiere rol de Vendedor o superior."
                 )
 
         # Perform batch update
@@ -333,15 +340,22 @@ def update_order_status(
     try:
         status_enum = OrderStatus(new_status)
 
-        # Validación especial para repartidores
+        # Validación de permisos según el estado
         if status_enum == OrderStatus.DELIVERED:
             if not can_update_delivery_status(current_user):
                 raise HTTPException(
                     status_code=403,
                     detail="No tienes permisos para marcar pedidos como entregados. Se requiere rol de Repartidor o superior."
                 )
+        elif status_enum in [OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS, OrderStatus.SHIPPED]:
+            # Estados que requieren validación de stock
+            if not can_update_stock_required_status(current_user):
+                raise HTTPException(
+                    status_code=403,
+                    detail="No tienes permisos para cambiar a estados que requieren validación de stock. Se requiere rol de Vendedor o superior."
+                )
         else:
-            # Para otros cambios de estado, requiere permisos de gestión
+            # Para otros cambios de estado (pending, cancelled), requiere permisos básicos
             if not can_create_orders(current_user):
                 raise HTTPException(
                     status_code=403,

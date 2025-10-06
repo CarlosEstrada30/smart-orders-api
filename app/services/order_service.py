@@ -260,12 +260,9 @@ class OrderService:
         try:
             for item in order.items:
                 # Restore stock (add back the quantity)
-                success = self.product_service.reserve_stock(
-                    db, item.product_id, -item.quantity  # Negative quantity to add stock
+                self.product_service.update_stock(
+                    db, item.product_id, item.quantity  # Add back the quantity
                 )
-                if not success:
-                    # Log error but continue with other items
-                    print(f"Warning: Could not restore stock for product {item.product_id}")
         except Exception as e:
             print(f"Error restoring stock for order {order.id}: {str(e)}")
             # Don't raise exception to avoid breaking the status update
@@ -354,13 +351,15 @@ class OrderService:
         if not current_order:
             return None
 
-        # LACTEOS FLOW: If confirming a pending order, validate and reserve stock
-        if (current_order.status == OrderStatus.PENDING and
-                status == OrderStatus.CONFIRMED):
+        # VALIDACIÓN DE STOCK: Si se pasa de PENDING o CANCELLED a cualquier estado que requiere stock
+        stock_required_states = {OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS, 
+                                OrderStatus.SHIPPED, OrderStatus.DELIVERED}
+        if (current_order.status in {OrderStatus.PENDING, OrderStatus.CANCELLED} and 
+                status in stock_required_states):
             # Validate stock availability and reserve stock
             self._validate_and_reserve_stock_on_confirm(db, current_order)
 
-        # STOCK RESTORATION: If going back to pending or cancelled from confirmed states
+        # RESTAURACIÓN DE STOCK: Si se vuelve a pending o cancelled desde estados que tenían stock reservado
         confirmed_states = {OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS, OrderStatus.SHIPPED, OrderStatus.DELIVERED}
         if (current_order.status in confirmed_states and
                 status in {OrderStatus.PENDING, OrderStatus.CANCELLED}):
@@ -386,9 +385,10 @@ class OrderService:
         if order.status not in [OrderStatus.PENDING, OrderStatus.CONFIRMED]:
             raise ValueError(f"Cannot cancel order with status {order.status}")
 
-        # LACTEOS FLOW: Only restore stock if order was confirmed (had stock reserved)
+        # RESTAURACIÓN DE STOCK: Solo restaurar si el estado tenía stock reservado
         # Pending orders don't have stock reserved, so no need to restore
-        if order.status == OrderStatus.CONFIRMED:
+        confirmed_states = {OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS, OrderStatus.SHIPPED, OrderStatus.DELIVERED}
+        if order.status in confirmed_states:
             for item in order.items:
                 self.product_service.update_stock(
                     db, item.product_id, item.quantity)
@@ -690,9 +690,12 @@ class OrderService:
 
     def _requires_stock_validation(self, order, new_status):
         """Check if order status transition requires stock validation"""
-        confirmed_states = {OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS,
-                            OrderStatus.SHIPPED, OrderStatus.DELIVERED}
-        return (order.status == OrderStatus.PENDING and new_status in confirmed_states)
+        # Estados que requieren validación de stock
+        stock_required_states = {OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS,
+                                OrderStatus.SHIPPED, OrderStatus.DELIVERED}
+        # Validar stock cuando se pasa de PENDING o CANCELLED a estados que requieren stock
+        return (order.status in {OrderStatus.PENDING, OrderStatus.CANCELLED} and 
+                new_status in stock_required_states)
 
     def _handle_successful_update(self, db, order, notes, order_id, success_orders, success_details):
         """Handle successful order update"""

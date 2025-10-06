@@ -79,6 +79,15 @@ def can_update_delivery_status(user: User) -> bool:
                            UserRole.ADMIN])
 
 
+def can_update_stock_required_status(user: User) -> bool:
+    """Puede cambiar a estados que requieren validación de stock (confirmed, in_progress, shipped, delivered)"""
+    return has_permission(user,
+                          [UserRole.SALES,
+                           UserRole.SUPERVISOR,
+                           UserRole.MANAGER,
+                           UserRole.ADMIN])
+
+
 def can_manage_clients(user: User) -> bool:
     """Puede gestionar clientes"""
     return has_permission(user,
