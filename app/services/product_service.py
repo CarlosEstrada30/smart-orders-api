@@ -203,7 +203,7 @@ class ProductService:
                     break
 
         # Validate required columns (after normalization)
-        required_columns = ['name', 'price', 'sku']
+        required_columns = ['name', 'price']
         missing_columns = []
         for col in required_columns:
             if col not in normalized_df.columns:
@@ -216,8 +216,10 @@ class ProductService:
             error_msg += "Required columns:\n"
             error_msg += "  - Name: could be any of: name, nombre, Name, Nombre, NOMBRE\n"
             error_msg += "  - Price: could be any of: price, precio, Price, Precio, PRECIO\n"
-            error_msg += "  - SKU: could be any of: sku, SKU, codigo, código, Codigo, Código\n"
-            error_msg += "Make sure your Excel file has columns for product name, price, and SKU."
+            error_msg += "Optional columns:\n"
+            error_msg += "  - SKU: could be any of: sku, SKU, codigo, código, "
+            error_msg += "Codigo, Código (auto-generated if not provided)\n"
+            error_msg += "Make sure your Excel file has columns for product name and price."
             raise ValueError(error_msg)
 
         return ExcelProcessor.clean_dataframe(normalized_df)
@@ -311,20 +313,25 @@ class ProductService:
         except (ValueError, TypeError):
             product_data['price'] = 0  # Will be validated later
 
-        # SKU validation
-        product_data['sku'] = str(row.get('sku', '')).strip()
+        # SKU validation - optional, will be auto-generated if empty
+        sku = str(row.get('sku', '')).strip()
+        if sku and sku != 'nan' and sku != '':
+            product_data['sku'] = sku
+        else:
+            # If SKU is empty, set it as None so the schema validator can generate it
+            product_data['sku'] = None
 
         # Optional fields
         description = str(row.get('description', '')).strip()
         if description and description != 'nan' and description != '':
             product_data['description'] = description
 
-        # Stock validation
+        # Stock validation - default to 0
         try:
             stock = int(float(row.get('stock', 0)))
             product_data['stock'] = stock
         except (ValueError, TypeError):
-            product_data['stock'] = 0  # Will be validated later
+            product_data['stock'] = 0  # Default to 0
 
         # Handle is_active
         is_active = row.get('is_active', True)
@@ -351,14 +358,6 @@ class ProductService:
                 row=index + 2,
                 field='price',
                 error='Price must be greater than 0'
-            )
-
-        # SKU validation
-        if not product_data.get('sku'):
-            return BulkUploadError(
-                row=index + 2,
-                field='sku',
-                error='SKU is required'
             )
 
         # Stock validation

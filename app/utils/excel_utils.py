@@ -179,8 +179,8 @@ class ExcelGenerator:
             'nombre': ['Producto Ejemplo 1', 'Producto Ejemplo 2'],
             'descripcion': ['Descripción del producto 1', 'Descripción del producto 2'],
             'precio': [10.50, 25.00],
-            'stock': [100, 50],
-            'sku': ['SKU001', 'SKU002'],
+            'stock': [0, 0],
+            'sku': ['', ''],  # Empty SKU to show it's optional
             'activo': [True, True]
         }
 
@@ -197,8 +197,8 @@ class ExcelGenerator:
             'Nombre (Requerido)',
             'Descripción (Opcional)',
             'Precio (Requerido)',
-            'Stock (Opcional)',
-            'SKU (Requerido, Único)',
+            'Stock (Opcional, por defecto: 0)',
+            'SKU (Opcional, se genera automáticamente)',
             'Activo (true/false)'
         ]
 
@@ -249,11 +249,11 @@ class ExcelGenerator:
             "2. Campos requeridos:",
             "   - nombre: Nombre del producto (obligatorio)",
             "   - precio: Precio del producto (obligatorio, debe ser un número)",
-            "   - sku: Código SKU (obligatorio, debe ser único)",
             "",
             "3. Campos opcionales:",
             "   - descripcion: Descripción del producto",
             "   - stock: Cantidad en inventario (por defecto: 0)",
+            "   - sku: Código SKU (opcional, se genera automáticamente si no se especifica)",
             "   - activo: true para activo, false para inactivo (por defecto: true)",
             "",
             "4. Guarde el archivo y súbalo usando el endpoint de carga masiva",
@@ -266,8 +266,8 @@ class ExcelGenerator:
             "- Columnas aceptadas para activo: activo, is_active, active, Active",
             "- Puede agregar tantas filas como necesite",
             "- Los precios deben ser números válidos mayores a 0",
-            "- Los SKUs deben ser únicos en todo el sistema",
-            "- Los valores de stock deben ser números enteros",
+            "- Si no especifica SKU, se generará automáticamente",
+            "- Los valores de stock deben ser números enteros (por defecto: 0)",
             "- Los valores de activo deben ser 'true' o 'false'"
         ]
 
@@ -482,8 +482,8 @@ class ExcelGenerator:
             'Nombre (Requerido)',
             'Descripción (Opcional)',
             'Precio (Requerido)',
-            'Stock (Opcional)',
-            'SKU (Requerido, Único)',
+            'Stock (Opcional, por defecto: 0)',
+            'SKU (Opcional, se genera automáticamente)',
             'Activo (true/false)'
         ]
 
@@ -523,12 +523,12 @@ class ExcelGenerator:
             "- Columna 'descripcion': Descripción del producto (opcional)",
             "- Columna 'precio': Precio del producto (requerido para importar)",
             "- Columna 'stock': Stock del producto (opcional, por defecto: 0)",
-            "- Columna 'sku': SKU del producto (requerido para importar, debe ser único)",
+            "- Columna 'sku': SKU del producto (opcional, se genera automáticamente si no se especifica)",
             "- Columna 'activo': Estado del producto (true/false)",
             "",
             "PARA RE-IMPORTAR:",
             "1. Edite los datos según necesite",
-            "2. IMPORTANTE: Los SKUs deben ser únicos",
+            "2. IMPORTANTE: Solo nombre y precio son requeridos",
             "3. Use POST /api/v1/products/bulk-upload",
             "4. El sistema detectará automáticamente los nombres de columnas"
         ]

@@ -228,11 +228,12 @@ async def bulk_upload_products(
     REQUIRED COLUMNS (any of these names):
     - nombre / name / Name / Nombre / NOMBRE: Product name
     - precio / price / Price / Precio / PRECIO: Product price (must be > 0)
-    - sku / SKU / codigo / código / Codigo / Código: Product SKU (must be unique)
 
     OPTIONAL COLUMNS (any of these names):
     - descripcion / description / Description / Descripción: Product description
     - stock / Stock / inventario / Inventario: Stock quantity (default: 0)
+    - sku / SKU / codigo / código / Codigo / Código: Product SKU 
+      (auto-generated if not provided)
     - activo / is_active / active / Active: true/false for active status (default: true)
 
     Download the template using GET /api/v1/products/template/download for the correct format.
