@@ -21,57 +21,57 @@ class OrdersReportGenerator:
 
     def __init__(self):
         self.width, self.height = A4
-        self.margin = 0.8 * cm  # Margen optimizado para máximo espacio
+        self.margin = 0.3 * cm  # Margen ultra compacto para máximo espacio
         self.styles = getSampleStyleSheet()
         self._setup_custom_styles()
 
     def _setup_custom_styles(self):
         """Configura estilos optimizados para reportes de múltiples órdenes"""
 
-        # Estilo para el título principal del reporte
+        # Estilo para el título principal del reporte - más grande
         self.styles.add(ParagraphStyle(
             name='ReportTitle',
             parent=self.styles['Heading1'],
-            fontSize=14,  # Reducido de 16 a 14
-            spaceAfter=3,  # Reducido de 6 a 3
+            fontSize=14,  # Aumentado de 10 a 14
+            spaceAfter=0.5,  # Mantenido
             textColor=colors.Color(0.2, 0.2, 0.2),
             alignment=TA_CENTER,
             fontName='Helvetica-Bold'
         ))
 
-        # Estilo para información de empresa
+        # Estilo para información de empresa - ultra compacto
         self.styles.add(ParagraphStyle(
             name='CompanyInfo',
             parent=self.styles['Normal'],
-            fontSize=7,  # Reducido de 8 a 7
-            spaceAfter=1,  # Reducido de 2 a 1
+            fontSize=6,
+            spaceAfter=0.2,  # Reducido de 0.5 a 0.2
             textColor=colors.Color(0.3, 0.3, 0.3),
             alignment=TA_CENTER,
             fontName='Helvetica'
         ))
 
-        # Estilo para títulos de cliente
+        # Estilo para títulos de cliente - ultra compacto
         self.styles.add(ParagraphStyle(
             name='ClientTitle',
             parent=self.styles['Heading3'],
-            fontSize=10,  # Reducido de 12 a 10
-            spaceBefore=4,  # Reducido de 8 a 4
-            spaceAfter=2,  # Reducido de 4 a 2
+            fontSize=10,  # Reducido de 10 a 8
+            spaceBefore=1,  # Reducido de 4 a 1
+            spaceAfter=1,  # Reducido de 2 a 1
             textColor=colors.Color(0.1, 0.1, 0.1),
             backgroundColor=colors.Color(0.94, 0.94, 0.94),
-            borderWidth=1,
+            borderWidth=0.5,  # Reducido de 1 a 0.5
             borderColor=colors.Color(0.7, 0.7, 0.7),
-            borderPadding=2,  # Reducido de 4 a 2
+            borderPadding=1,  # Reducido de 2 a 1
             alignment=TA_LEFT,
             fontName='Helvetica-Bold'
         ))
 
-        # Estilo para información del cliente
+        # Estilo para información del cliente - ultra compacto
         self.styles.add(ParagraphStyle(
             name='ClientInfo',
             parent=self.styles['Normal'],
-            fontSize=7,  # Reducido de 8 a 7
-            spaceAfter=0.5,  # Reducido de 1 a 0.5
+            fontSize=7,
+            spaceAfter=0.2,  # Reducido de 0.5 a 0.2
             textColor=colors.Color(0.4, 0.4, 0.4),
             alignment=TA_LEFT,
             fontName='Helvetica'
@@ -89,26 +89,26 @@ class OrdersReportGenerator:
             fontName='Helvetica-Bold'
         ))
 
-        # Estilo para texto normal compacto con mejor espaciado para listas
+        # Estilo para texto normal ultra compacto
         self.styles.add(ParagraphStyle(
             name='CompactText',
             parent=self.styles['Normal'],
-            fontSize=7,  # Reducido de 8 a 7
-            spaceAfter=1,  # Reducido de 2 a 1
-            spaceBefore=0.5,  # Reducido de 1 a 0.5
-            leading=8,  # Reducido de 10 a 8 para más compacto
+            fontSize=6,  # Reducido de 7 a 6
+            spaceAfter=0.5,  # Reducido de 1 a 0.5
+            spaceBefore=0.2,  # Reducido de 0.5 a 0.2
+            leading=6,  # Reducido de 8 a 6 para ultra compacto
             textColor=colors.Color(0.2, 0.2, 0.2),
             alignment=TA_LEFT,
             fontName='Helvetica'
         ))
 
-        # Estilo para totales
+        # Estilo para totales - ultra compacto
         self.styles.add(ParagraphStyle(
             name='TotalText',
             parent=self.styles['Normal'],
-            fontSize=8,  # Reducido de 9 a 8
-            spaceBefore=1,  # Reducido de 2 a 1
-            spaceAfter=1,  # Reducido de 2 a 1
+            fontSize=7,  # Reducido de 8 a 7
+            spaceBefore=0.5,  # Reducido de 1 a 0.5
+            spaceAfter=0.5,  # Reducido de 1 a 0.5
             textColor=colors.Color(0.1, 0.1, 0.1),
             alignment=TA_RIGHT,
             fontName='Helvetica-Bold'
@@ -135,7 +135,7 @@ class OrdersReportGenerator:
 
         # Header con logo y información de empresa
         story.extend(self._create_report_header(settings, title, len(orders), client_timezone))
-        story.append(Spacer(1, 3 * mm))  # Reducido de 6mm a 3mm
+        # Sin espaciado adicional después del header
 
         # Agrupar órdenes por cliente
         orders_by_client = self._group_orders_by_client(orders)
@@ -143,16 +143,16 @@ class OrdersReportGenerator:
         # Generar contenido por cliente
         for client, client_orders in orders_by_client.items():
             story.extend(self._create_client_section(client, client_orders, client_timezone))
-            story.append(Spacer(1, 2 * mm))  # Reducido de 4mm a 2mm
+            # Sin espaciado adicional después del header
 
         # Consolidado de rutas (antes del resumen general) - Nueva página
         story.append(PageBreak())  # Salto de página para empezar en página nueva
         story.extend(self._create_route_consolidation_section(orders))
-        story.append(Spacer(1, 2 * mm))  # Reducido de 4mm a 2mm
+        # Sin espaciado adicional después del header
 
         # Resumen final
         story.extend(self._create_summary_section(orders))
-        story.append(Spacer(1, 2 * mm))  # Reducido de 4mm a 2mm
+        # Sin espaciado adicional después del header
 
         # Footer
         story.extend(self._create_report_footer(settings, client_timezone))
@@ -178,7 +178,7 @@ class OrdersReportGenerator:
 
         # Header con logo y información de empresa
         story.extend(self._create_report_header(settings, title, len(orders), client_timezone))
-        story.append(Spacer(1, 3 * mm))  # Reducido de 6mm a 3mm
+        # Sin espaciado adicional después del header
 
         # Agrupar órdenes por cliente
         orders_by_client = self._group_orders_by_client(orders)
@@ -186,16 +186,16 @@ class OrdersReportGenerator:
         # Generar contenido por cliente
         for client, client_orders in orders_by_client.items():
             story.extend(self._create_client_section(client, client_orders, client_timezone))
-            story.append(Spacer(1, 2 * mm))  # Reducido de 4mm a 2mm
+            # Sin espaciado adicional después del header
 
         # Consolidado de rutas (antes del resumen general) - Nueva página
         story.append(PageBreak())  # Salto de página para empezar en página nueva
         story.extend(self._create_route_consolidation_section(orders))
-        story.append(Spacer(1, 2 * mm))  # Reducido de 4mm a 2mm
+        # Sin espaciado adicional después del header
 
         # Resumen final
         story.extend(self._create_summary_section(orders))
-        story.append(Spacer(1, 2 * mm))  # Reducido de 4mm a 2mm
+        # Sin espaciado adicional después del header
 
         # Footer
         story.extend(self._create_report_footer(settings, client_timezone))
@@ -213,31 +213,29 @@ class OrdersReportGenerator:
         """Crea el header del reporte con logo y información de empresa"""
         elements = []
 
-        # Información de la empresa en formato compacto
-        company_parts = [f"<b>{settings.company_name}</b>"]
-        if settings.business_name:
-            company_parts.append(settings.business_name)
-        company_parts.append(f"NIT: {settings.nit}")
+        # Información de la empresa en formato ultra compacto - una sola línea
+        company_info = f'<para align="center"><b>{settings.company_name}</b> | Tel: {settings.phone}</para>'
 
-        company_info = f'<para align="center">{" | ".join(company_parts)}</para>'
-
-        # Si hay logo, crear tabla con logo e info
+        # Si hay logo, crear tabla con logo e info - más compacto
         if settings.logo_url:
             try:
                 logo = self._get_logo_image(
-                    settings.logo_url, max_width=1.5 * cm, max_height=1.5 * cm)  # Reducido de 2.2cm a 1.5cm
+                    settings.logo_url, max_width=0.6 * cm, max_height=0.6 * cm)  # Reducido de 0.8cm a 0.6cm
                 if logo:
                     header_data = [
-                        [logo, Paragraph(company_info, self.styles['Normal'])]]
+                        [logo, Paragraph(company_info, self.styles['CompanyInfo'])]]
                     header_table = Table(
                         header_data, colWidths=[
-                            2.0 * cm, 15 * cm])  # Ajustado para logo más pequeño
+                            1.0 * cm, 17.0 * cm])  # Ajustado para logo más pequeño
                     header_table.setStyle(TableStyle([
                         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                         ('ALIGN', (0, 0), (0, 0), 'CENTER'),
                         ('ALIGN', (1, 0), (1, 0), 'LEFT'),
                         ('LEFTPADDING', (0, 0), (-1, -1), 0),
                         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                        # Padding mínimo para tabla de header
+                        ('TOPPADDING', (0, 0), (-1, -1), 0),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
                     ]))
                     elements.append(header_table)
                 else:
@@ -250,32 +248,13 @@ class OrdersReportGenerator:
         else:
             elements.append(Paragraph(company_info, self.styles['Normal']))
 
-        # Información de contacto
-        contact_parts = []
-        if settings.address:
-            contact_parts.append(settings.address)
-        if settings.phone:
-            contact_parts.append(f"Tel: {settings.phone}")
-        if settings.email:
-            contact_parts.append(settings.email)
+        # Eliminamos la línea duplicada de teléfono ya que está en company_info
 
-        if contact_parts:
-            contact_text = " | ".join(contact_parts)
-            elements.append(
-                Paragraph(
-                    f'<para align="center">{contact_text}</para>',
-                    self.styles['CompanyInfo']))
-
-        # Título del reporte
-        elements.append(Spacer(1, 2 * mm))  # Reducido de 4mm a 2mm
+        # Título del reporte - sin espaciado adicional
         elements.append(Paragraph(title.upper(), self.styles['ReportTitle']))
 
-        # Información del reporte
-        current_time = datetime.now()
-        if client_timezone:
-            from ..utils.timezone import convert_utc_to_client_timezone
-            current_time = convert_utc_to_client_timezone(current_time, client_timezone)
-        report_info = f"Total de órdenes: {total_orders} | Fecha: {current_time.strftime('%d/%m/%Y %H:%M')}"
+        # Información del reporte - solo total de órdenes
+        report_info = f"Total: {total_orders} órdenes"
         elements.append(
             Paragraph(
                 f'<para align="center">{report_info}</para>',
@@ -325,26 +304,68 @@ class OrdersReportGenerator:
         table_data = [headers]
 
         for order in orders:
-            # Crear resumen compacto de productos (1 línea por producto)
-            products_summary = []
-            for item in order.items:
+            # Crear resumen compacto de productos en 2 columnas internas
+            products_left = []
+            products_right = []
+            
+            for i, item in enumerate(order.items):
                 product_name = item.product.name
                 quantity = item.quantity
-                unit_price = item.unit_price
-                subtotal = quantity * unit_price
-
-                # Formato compacto: cantidad, nombre y subtotal en una línea
+                
+                # Formato: cantidad + nombre del producto
                 if hasattr(item.product, 'unit') and item.product.unit:
-                    products_summary.append(
-                        f"• {quantity} {item.product.unit} {product_name} = Q {subtotal:,.2f}"
-                    )
+                    product_text = f"{quantity} {item.product.unit} {product_name}"
                 else:
-                    products_summary.append(
-                        f"• {quantity}x {product_name} = Q {subtotal:,.2f}"
-                    )
+                    product_text = f"{quantity}x {product_name}"
+                
+                # Distribuir productos en dos columnas
+                if i % 2 == 0:
+                    products_left.append(product_text)
+                else:
+                    products_right.append(product_text)
 
-            # Mostrar productos en formato compacto
-            products_text = " | ".join(products_summary)
+            # Crear tabla de ReportLab para las dos columnas de productos (múltiples filas)
+            if products_left or products_right:
+                # Crear filas para la tabla interna - cada producto en su propia fila
+                internal_table_data = []
+                
+                # Determinar el número máximo de filas
+                max_rows = max(len(products_left), len(products_right))
+                
+                for i in range(max_rows):
+                    left_product = products_left[i] if i < len(products_left) else ""
+                    right_product = products_right[i] if i < len(products_right) else ""
+                    internal_table_data.append([left_product, right_product])
+                
+                # Crear tabla interna con ReportLab - columnas más anchas para aprovechar el espacio
+                internal_table = Table(internal_table_data, colWidths=[5.8 * cm, 5.8 * cm])
+                
+                # Estilos para la tabla interna (solo línea divisoria central) - espaciado mínimo
+                internal_table.setStyle(TableStyle([
+                    # Solo línea divisoria central en todas las filas - mismo grosor que las demás líneas
+                    ('LINEBEFORE', (1, 0), (1, -1), 0.5, colors.Color(0.7, 0.7, 0.7)),
+                    
+                    # Padding interno ultra mínimo
+                    ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0.5),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0.5),
+                    
+                    # Alineación
+                    ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                    ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    
+                    # Fuente con leading reducido
+                    ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 7),
+                    ('LEADING', (0, 0), (-1, -1), 8),  # Leading reducido para menos espacio entre líneas
+                ]))
+                
+                # Crear el contenido de la celda con la tabla interna
+                products_content = internal_table
+            else:
+                products_content = Paragraph("Sin productos", self.styles['CompactText'])
 
             # Formatear estado
             status_text = {
@@ -368,13 +389,13 @@ class OrdersReportGenerator:
             row = [
                 Paragraph(order_number_with_date, self.styles['CompactText']),
                 status_text,
-                Paragraph(products_text, self.styles['CompactText']),
+                products_content,
                 f"Q {order.total_amount:,.2f}"
             ]
             table_data.append(row)
 
-        # Crear tabla de órdenes (expandir columna de productos para mostrar precios)
-        col_widths = [2.6 * cm, 1.8 * cm, 10.0 * cm, 1.8 * cm]
+        # Crear tabla de órdenes (expandir columna de productos con 2 columnas internas) - optimizada para más espacio
+        col_widths = [2.8 * cm, 2.0 * cm, 12.0 * cm, 2.0 * cm]
         orders_table = Table(table_data, colWidths=col_widths)
 
         table_style = [
@@ -399,11 +420,11 @@ class OrdersReportGenerator:
             ('GRID', (0, 0), (-1, -1), 0.5, colors.Color(0.7, 0.7, 0.7)),
             ('LINEBELOW', (0, 0), (-1, 0), 1, colors.Color(0.3, 0.3, 0.3)),
 
-            # Padding optimizado
-            ('LEFTPADDING', (0, 0), (-1, -1), 2),  # Reducido de 3 a 2
-            ('RIGHTPADDING', (0, 0), (-1, -1), 2),  # Reducido de 3 a 2
-            ('TOPPADDING', (0, 1), (-1, -1), 2),  # Reducido de 3 a 2
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 2),  # Reducido de 3 a 2
+            # Padding ultra optimizado
+            ('LEFTPADDING', (0, 0), (-1, -1), 1),  # Reducido de 2 a 1
+            ('RIGHTPADDING', (0, 0), (-1, -1), 1),  # Reducido de 2 a 1
+            ('TOPPADDING', (0, 1), (-1, -1), 1),  # Reducido de 2 a 1
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 1),  # Reducido de 2 a 1
         ]
 
         # Agregar colores alternados para las filas
@@ -689,8 +710,8 @@ class OrdersReportGenerator:
     def _get_logo_image(
             self,
             logo_url: str,
-            max_width=2.2 * cm,
-            max_height=2.2 * cm):
+            max_width=0.6 * cm,
+            max_height=0.6 * cm):
         """Descarga y prepara el logo para insertar en el PDF"""
         try:
             response = requests.get(logo_url, timeout=5)
