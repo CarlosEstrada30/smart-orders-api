@@ -540,7 +540,7 @@ class ProfessionalReceiptGenerator:
             timestamp = f"Comprobante generado el {client_time.strftime('%d de %B de %Y a las %I:%M %p')}"
         else:
             timestamp = f"Comprobante generado el {datetime.now().strftime('%d de %B de %Y a las %I:%M %p')}"
-        
+
         elements.append(
             Paragraph(
                 f'<para align="center">{timestamp}</para>',

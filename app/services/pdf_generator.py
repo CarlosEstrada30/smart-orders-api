@@ -10,7 +10,7 @@ from typing import Optional
 
 from ..models.invoice import Invoice
 from ..schemas.invoice import CompanyInfo
-from ..utils.timezone import convert_utc_to_client_timezone, format_datetime_for_client
+from ..utils.timezone import convert_utc_to_client_timezone
 
 
 class InvoicePDFGenerator:
@@ -415,7 +415,7 @@ class InvoicePDFGenerator:
             timestamp = client_time.strftime("%d/%m/%Y %H:%M")
         else:
             timestamp = datetime.now().strftime("%d/%m/%Y %H:%M")
-        
+
         elements.append(
             Paragraph(
                 f"Documento generado el {timestamp}",

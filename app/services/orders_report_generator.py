@@ -307,17 +307,17 @@ class OrdersReportGenerator:
             # Crear resumen compacto de productos en 2 columnas internas
             products_left = []
             products_right = []
-            
+
             for i, item in enumerate(order.items):
                 product_name = item.product.name
                 quantity = item.quantity
-                
+
                 # Formato: cantidad + nombre del producto
                 if hasattr(item.product, 'unit') and item.product.unit:
                     product_text = f"{quantity} {item.product.unit} {product_name}"
                 else:
                     product_text = f"{quantity}x {product_name}"
-                
+
                 # Distribuir productos en dos columnas
                 if i % 2 == 0:
                     products_left.append(product_text)
@@ -328,40 +328,40 @@ class OrdersReportGenerator:
             if products_left or products_right:
                 # Crear filas para la tabla interna - cada producto en su propia fila
                 internal_table_data = []
-                
+
                 # Determinar el número máximo de filas
                 max_rows = max(len(products_left), len(products_right))
-                
+
                 for i in range(max_rows):
                     left_product = products_left[i] if i < len(products_left) else ""
                     right_product = products_right[i] if i < len(products_right) else ""
                     internal_table_data.append([left_product, right_product])
-                
+
                 # Crear tabla interna con ReportLab - columnas más anchas para aprovechar el espacio
                 internal_table = Table(internal_table_data, colWidths=[5.8 * cm, 5.8 * cm])
-                
+
                 # Estilos para la tabla interna (solo línea divisoria central) - espaciado mínimo
                 internal_table.setStyle(TableStyle([
                     # Solo línea divisoria central en todas las filas - mismo grosor que las demás líneas
                     ('LINEBEFORE', (1, 0), (1, -1), 0.5, colors.Color(0.7, 0.7, 0.7)),
-                    
+
                     # Padding interno ultra mínimo
                     ('LEFTPADDING', (0, 0), (-1, -1), 3),
                     ('RIGHTPADDING', (0, 0), (-1, -1), 3),
                     ('TOPPADDING', (0, 0), (-1, -1), 0.5),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 0.5),
-                    
+
                     # Alineación
                     ('ALIGN', (0, 0), (0, -1), 'LEFT'),
                     ('ALIGN', (1, 0), (1, -1), 'LEFT'),
                     ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    
+
                     # Fuente con leading reducido
                     ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
                     ('FONTSIZE', (0, 0), (-1, -1), 7),
                     ('LEADING', (0, 0), (-1, -1), 8),  # Leading reducido para menos espacio entre líneas
                 ]))
-                
+
                 # Crear el contenido de la celda con la tabla interna
                 products_content = internal_table
             else:
@@ -382,7 +382,7 @@ class OrdersReportGenerator:
                 created_at_client = convert_utc_to_client_timezone(order.created_at, client_timezone)
             else:
                 created_at_client = order.created_at
-                
+
             # Crear número de orden con fecha debajo
             order_number_with_date = f"{order.order_number}<br/><font size='6'>{created_at_client.strftime('%d/%m/%Y')}</font>"
 

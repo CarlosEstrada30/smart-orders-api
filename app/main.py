@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from .database import engine
-from .models import Base
 from .middleware import TimezoneMiddleware
 from .api.v1 import (
     users, clients, products, orders, routes, auth,
@@ -14,8 +13,7 @@ import os
 
 # IMPORTANTE: No crear tablas automáticamente en producción
 # En producción usamos migraciones de Alembic
-if os.getenv("ENVIRONMENT") != "production":
-    Base.metadata.create_all(bind=engine)
+environment = os.getenv("ENVIRONMENT", "production")
 
 # Create FastAPI app
 app = FastAPI(
