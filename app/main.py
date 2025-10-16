@@ -14,8 +14,7 @@ import os
 
 # IMPORTANTE: No crear tablas automáticamente en producción
 # En producción usamos migraciones de Alembic
-if os.getenv("ENVIRONMENT") != "production":
-    Base.metadata.create_all(bind=engine)
+environment = os.getenv("ENVIRONMENT", "production")
 
 # Create FastAPI app
 app = FastAPI(
