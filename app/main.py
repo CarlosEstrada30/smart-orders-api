@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from .database import engine
-from .models import Base
 from .middleware import TimezoneMiddleware
 from .api.v1 import (
     users, clients, products, orders, routes, auth,

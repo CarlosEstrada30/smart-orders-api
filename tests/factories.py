@@ -7,7 +7,7 @@ objetos de prueba en los tests.
 
 Uso:
     from tests.factories import ClientFactory, ProductFactory
-    
+
     # En tu test con el fixture factories:
     def test_something(self, factories, db_session):
         client = factories.ClientFactory.create(name="Test Client")
@@ -26,11 +26,11 @@ faker = Faker('es_ES')
 
 class ClientFactory(factory.alchemy.SQLAlchemyModelFactory):
     """Factory para crear clientes de prueba."""
-    
+
     class Meta:
         model = Client
         sqlalchemy_session_persistence = "commit"
-    
+
     name = factory.LazyAttribute(lambda _: faker.company())
     email = factory.LazyAttribute(lambda _: faker.email())
     phone = factory.LazyAttribute(lambda _: faker.phone_number())
@@ -41,14 +41,17 @@ class ClientFactory(factory.alchemy.SQLAlchemyModelFactory):
 
 class ProductFactory(factory.alchemy.SQLAlchemyModelFactory):
     """Factory para crear productos de prueba."""
-    
+
     class Meta:
         model = Product
         sqlalchemy_session_persistence = "commit"
-    
+
     name = factory.LazyAttribute(lambda _: faker.word().capitalize())
     description = factory.LazyAttribute(lambda _: faker.text(max_nb_chars=200))
-    price = factory.LazyAttribute(lambda _: round(faker.random.uniform(10, 1000), 2))
+    price = factory.LazyAttribute(
+        lambda _: round(
+            faker.random.uniform(
+                10, 1000), 2))
     stock = factory.LazyAttribute(lambda _: faker.random_int(min=0, max=100))
     sku = factory.LazyAttribute(lambda _: faker.bothify(text='SKU-????-####'))
     is_active = True
@@ -56,22 +59,22 @@ class ProductFactory(factory.alchemy.SQLAlchemyModelFactory):
 
 class RouteFactory(factory.alchemy.SQLAlchemyModelFactory):
     """Factory para crear rutas de prueba."""
-    
+
     class Meta:
         model = Route
         sqlalchemy_session_persistence = "commit"
-    
+
     name = factory.Sequence(lambda n: f"Ruta {n}")
     is_active = True
 
 
 class UserFactory(factory.alchemy.SQLAlchemyModelFactory):
     """Factory para crear usuarios de prueba."""
-    
+
     class Meta:
         model = User
         sqlalchemy_session_persistence = "commit"
-    
+
     username = factory.LazyAttribute(lambda _: faker.user_name())
     email = factory.LazyAttribute(lambda _: faker.email())
     full_name = factory.LazyAttribute(lambda _: faker.name())
@@ -85,38 +88,45 @@ class UserFactory(factory.alchemy.SQLAlchemyModelFactory):
 
 class OrderFactory(factory.alchemy.SQLAlchemyModelFactory):
     """Factory para crear órdenes de prueba."""
-    
+
     class Meta:
         model = Order
         sqlalchemy_session_persistence = "commit"
-    
-    order_number = factory.LazyAttribute(lambda _: faker.bothify(text='ORD-########'))
+
+    order_number = factory.LazyAttribute(
+        lambda _: faker.bothify(text='ORD-########'))
     client = factory.SubFactory(ClientFactory)
     route = factory.SubFactory(RouteFactory)
     status = OrderStatus.PENDING
-    total_amount = factory.LazyAttribute(lambda _: round(faker.random.uniform(100, 5000), 2))
+    total_amount = factory.LazyAttribute(
+        lambda _: round(
+            faker.random.uniform(
+                100, 5000), 2))
     discount_percentage = 0.0
     notes = factory.LazyAttribute(lambda _: faker.text(max_nb_chars=100))
 
 
 class OrderItemFactory(factory.alchemy.SQLAlchemyModelFactory):
     """Factory para crear items de orden de prueba."""
-    
+
     class Meta:
         model = OrderItem
         sqlalchemy_session_persistence = "commit"
-    
+
     order = factory.SubFactory(OrderFactory)
     product = factory.SubFactory(ProductFactory)
     quantity = factory.LazyAttribute(lambda _: faker.random_int(min=1, max=10))
-    unit_price = factory.LazyAttribute(lambda _: round(faker.random.uniform(10, 500), 2))
+    unit_price = factory.LazyAttribute(
+        lambda _: round(
+            faker.random.uniform(
+                10, 500), 2))
     subtotal = factory.LazyAttribute(lambda obj: obj.quantity * obj.unit_price)
 
 
 def configure_factories(session):
     """
     Configura todos los factories para usar la sesión proporcionada.
-    
+
     Args:
         session: SQLAlchemy session a usar
     """
@@ -128,7 +138,6 @@ def configure_factories(session):
         OrderFactory,
         OrderItemFactory,
     ]
-    
+
     for factory_class in factories:
         factory_class._meta.sqlalchemy_session = session
-

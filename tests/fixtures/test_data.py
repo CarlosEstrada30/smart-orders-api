@@ -12,7 +12,7 @@ from typing import Dict, Any
 
 class TestDataFactory:
     """Factory para generar datos de prueba."""
-    
+
     @staticmethod
     def create_user_data(**overrides) -> Dict[str, Any]:
         """Crear datos de usuario con posibles overrides."""
@@ -24,7 +24,7 @@ class TestDataFactory:
         }
         base_data.update(overrides)
         return base_data
-    
+
     @staticmethod
     def create_tenant_data(**overrides) -> Dict[str, Any]:
         """Crear datos de tenant con posibles overrides."""
@@ -34,7 +34,7 @@ class TestDataFactory:
         }
         base_data.update(overrides)
         return base_data
-    
+
     @staticmethod
     def create_product_data(**overrides) -> Dict[str, Any]:
         """Crear datos de producto con posibles overrides."""
@@ -49,7 +49,7 @@ class TestDataFactory:
         }
         base_data.update(overrides)
         return base_data
-    
+
     @staticmethod
     def create_client_data(**overrides) -> Dict[str, Any]:
         """Crear datos de cliente con posibles overrides."""
@@ -62,9 +62,10 @@ class TestDataFactory:
         }
         base_data.update(overrides)
         return base_data
-    
+
     @staticmethod
-    def create_order_data(client_id: int = None, **overrides) -> Dict[str, Any]:
+    def create_order_data(client_id: int = None, **
+                          overrides) -> Dict[str, Any]:
         """Crear datos de orden con posibles overrides."""
         base_data = {
             "client_id": client_id or 1,
@@ -75,9 +76,10 @@ class TestDataFactory:
         }
         base_data.update(overrides)
         return base_data
-    
+
     @staticmethod
-    def create_order_item_data(order_id: int = None, product_id: int = None, **overrides) -> Dict[str, Any]:
+    def create_order_item_data(
+            order_id: int = None, product_id: int = None, **overrides) -> Dict[str, Any]:
         """Crear datos de item de orden con posibles overrides."""
         base_data = {
             "order_id": order_id or 1,
@@ -94,7 +96,8 @@ class TestDataFactory:
 @pytest.fixture
 def admin_user_data():
     """Datos de usuario administrador."""
-    return TestDataFactory.create_user_data(role="admin", email="admin@test.com")
+    return TestDataFactory.create_user_data(
+        role="admin", email="admin@test.com")
 
 
 @pytest.fixture
@@ -141,7 +144,7 @@ def sample_order_with_items():
 # Mock objects para casos específicos
 class MockSettings:
     """Mock object para configuraciones de la aplicación."""
-    
+
     def __init__(self, **kwargs):
         defaults = {
             "company_name": "Test Company",
@@ -154,15 +157,20 @@ class MockSettings:
             "logo_url": None
         }
         defaults.update(kwargs)
-        
+
         for key, value in defaults.items():
             setattr(self, key, value)
 
 
 class MockProduct:
     """Mock object para productos."""
-    
-    def __init__(self, name: str, description: str = "", price: float = 0.0, sku: str = ""):
+
+    def __init__(
+            self,
+            name: str,
+            description: str = "",
+            price: float = 0.0,
+            sku: str = ""):
         self.name = name
         self.description = description
         self.price = price
@@ -171,7 +179,7 @@ class MockProduct:
 
 class MockOrderItem:
     """Mock object para items de orden."""
-    
+
     def __init__(self, product: MockProduct, quantity: int, unit_price: float):
         self.product = product
         self.quantity = quantity
@@ -181,8 +189,13 @@ class MockOrderItem:
 
 class MockClient:
     """Mock object para clientes."""
-    
-    def __init__(self, name: str, email: str = "", phone: str = "", address: str = ""):
+
+    def __init__(
+            self,
+            name: str,
+            email: str = "",
+            phone: str = "",
+            address: str = ""):
         self.name = name
         self.email = email
         self.phone = phone
@@ -191,7 +204,7 @@ class MockClient:
 
 class MockOrder:
     """Mock object para órdenes."""
-    
+
     def __init__(self, order_number: str, client: MockClient, items: list):
         self.order_number = order_number
         self.client = client

@@ -232,7 +232,7 @@ async def bulk_upload_products(
     OPTIONAL COLUMNS (any of these names):
     - descripcion / description / Description / Descripción: Product description
     - stock / Stock / inventario / Inventario: Stock quantity (default: 0)
-    - sku / SKU / codigo / código / Codigo / Código: Product SKU 
+    - sku / SKU / codigo / código / Codigo / Código: Product SKU
       (auto-generated if not provided)
     - activo / is_active / active / Active: true/false for active status (default: true)
 

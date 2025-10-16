@@ -10,20 +10,22 @@ import pytest
 from jose import jwt
 from datetime import datetime, timedelta
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
 
 from app.main import app
 from app.database import get_db, Base
-from app.models import *  # Importar todos los modelos
+from app.models.user import User, UserRole
 from passlib.context import CryptContext
 
 # Importar factories
 from tests import factories
 
 # Obtener URL de base de datos desde variable de entorno
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/test_db')
+DATABASE_URL = os.getenv(
+    'DATABASE_URL',
+    'postgresql://postgres:postgres@localhost:5432/test_db')
 
 # Crear motor de base de datos
 engine = create_engine(
@@ -32,7 +34,10 @@ engine = create_engine(
     echo=False,  # Cambiar a True para ver las queries SQL
 )
 
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+TestingSessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine)
 
 # Contexto para hashear contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -41,21 +46,23 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def create_test_jwt(secret_key: str = None, exp: int = None) -> str:
     """
     Crear un JWT para tests con la estructura específica requerida.
-    
+
     Args:
         secret_key: Clave secreta para firmar el JWT (por defecto usa SECRET_KEY del entorno)
         exp: Timestamp de expiración (por defecto 1 año en el futuro)
-    
+
     Returns:
         JWT firmado como string
     """
     if secret_key is None:
-        secret_key = os.getenv('SECRET_KEY', 'test-secret-key-for-testing-only')
-    
+        secret_key = os.getenv(
+            'SECRET_KEY',
+            'test-secret-key-for-testing-only')
+
     if exp is None:
         # 1 año en el futuro
         exp = int((datetime.now() + timedelta(days=365)).timestamp())
-    
+
     # Payload con la estructura específica requerida
     payload = {
         "sub": "admin@example.com",
@@ -74,7 +81,7 @@ def create_test_jwt(secret_key: str = None, exp: int = None) -> str:
         },
         "exp": exp
     }
-    
+
     # Crear y firmar el JWT
     token = jwt.encode(payload, secret_key, algorithm="HS256")
     return token
@@ -89,7 +96,7 @@ def test_user(db_session: Session):
     existing_user = db_session.query(User).filter_by(id=1).first()
     if existing_user:
         return existing_user
-    
+
     # Crear usuario que coincide con el JWT
     test_user = User(
         id=1,
@@ -102,11 +109,11 @@ def test_user(db_session: Session):
         is_superuser=True,
         role=UserRole.EMPLOYEE
     )
-    
+
     db_session.add(test_user)
     db_session.commit()
     db_session.refresh(test_user)
-    
+
     return test_user
 
 
@@ -119,15 +126,15 @@ def db_session() -> Session:
     """
     # Crear todas las tablas
     Base.metadata.create_all(bind=engine)
-    
+
     # Crear sesión
     session = TestingSessionLocal()
-    
+
     yield session
-    
+
     # Limpiar después del test
     session.close()
-    
+
     # Eliminar todas las tablas
     Base.metadata.drop_all(bind=engine)
 
@@ -140,10 +147,10 @@ def client(db_session: Session):
     """
     def override_get_db():
         return db_session
-    
+
     # Reemplazar la dependencia get_db con nuestra sesión de test
     app.dependency_overrides[get_db] = override_get_db
-    
+
     try:
         test_client = TestClient(app)
         yield test_client
@@ -160,39 +167,37 @@ def authenticated_client(client, test_user):
     """
     # Crear JWT con la estructura específica requerida
     test_jwt = create_test_jwt()
-    
+
     # Headers con JWT fijo
     headers = {"Authorization": f"Bearer {test_jwt}"}
-    
+
     # Crear cliente con headers por defecto
     class AuthenticatedTestClient:
         def __init__(self, client, headers):
             self.client = client
             self.headers = headers
-        
+
         def get(self, url, **kwargs):
             if 'headers' not in kwargs:
                 kwargs['headers'] = self.headers
             return self.client.get(url, **kwargs)
-        
+
         def post(self, url, **kwargs):
             if 'headers' not in kwargs:
                 kwargs['headers'] = self.headers
             return self.client.post(url, **kwargs)
-        
+
         def put(self, url, **kwargs):
             if 'headers' not in kwargs:
                 kwargs['headers'] = self.headers
             return self.client.put(url, **kwargs)
-        
+
         def delete(self, url, **kwargs):
             if 'headers' not in kwargs:
                 kwargs['headers'] = self.headers
             return self.client.delete(url, **kwargs)
-    
+
     return AuthenticatedTestClient(client, headers)
-
-
 
 
 @pytest.fixture
@@ -225,7 +230,7 @@ def sample_product_data():
 def setup_factories(db_session):
     """
     Configura todos los factories para usar la sesión de BD actual.
-    
+
     Uso:
         def test_something(self, setup_factories, db_session):
             from tests.factories import ClientFactory

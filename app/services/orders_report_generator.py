@@ -382,7 +382,7 @@ class OrdersReportGenerator:
                 created_at_client = convert_utc_to_client_timezone(order.created_at, client_timezone)
             else:
                 created_at_client = order.created_at
-                
+
             # Crear número de orden con fecha debajo
             order_number_with_date = f"{order.order_number}<br/><font size='6'>{created_at_client.strftime('%d/%m/%Y')}</font>"
 

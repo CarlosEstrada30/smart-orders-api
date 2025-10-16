@@ -36,7 +36,7 @@ class Settings(BaseSettings):
 
     # Logging configuration
     LOG_LEVEL: str = "INFO"
-    
+
     # Timezone configuration
     DEFAULT_TIMEZONE: str = "America/Guatemala"  # UTC-6
     TIMEZONE_HEADER: str = "X-Timezone"
