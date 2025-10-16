@@ -251,10 +251,8 @@ class CompactReceiptGenerator:
         # Convert order dates to client timezone if provided
         if client_timezone:
             created_at_client = convert_utc_to_client_timezone(order.created_at, client_timezone)
-            updated_at_client = convert_utc_to_client_timezone(order.updated_at, client_timezone) if order.updated_at else None
         else:
             created_at_client = order.created_at
-            updated_at_client = order.updated_at
 
         # Crear tabla simple de dos columnas sin colores de fondo
         order_client_data = [
@@ -444,7 +442,7 @@ class CompactReceiptGenerator:
             timestamp = client_time.strftime('%d/%m/%Y %H:%M')
         else:
             timestamp = datetime.now().strftime('%d/%m/%Y %H:%M')
-            
+
         footer_parts = [f"Generado: {timestamp}"]
 
         if settings.phone:

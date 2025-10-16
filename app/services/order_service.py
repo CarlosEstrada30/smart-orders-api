@@ -352,9 +352,9 @@ class OrderService:
             return None
 
         # VALIDACIÓN DE STOCK: Si se pasa de PENDING o CANCELLED a cualquier estado que requiere stock
-        stock_required_states = {OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS, 
-                                OrderStatus.SHIPPED, OrderStatus.DELIVERED}
-        if (current_order.status in {OrderStatus.PENDING, OrderStatus.CANCELLED} and 
+        stock_required_states = {OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS,
+                                 OrderStatus.SHIPPED, OrderStatus.DELIVERED}
+        if (current_order.status in {OrderStatus.PENDING, OrderStatus.CANCELLED} and
                 status in stock_required_states):
             # Validate stock availability and reserve stock
             self._validate_and_reserve_stock_on_confirm(db, current_order)
@@ -692,9 +692,9 @@ class OrderService:
         """Check if order status transition requires stock validation"""
         # Estados que requieren validación de stock
         stock_required_states = {OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS,
-                                OrderStatus.SHIPPED, OrderStatus.DELIVERED}
+                                 OrderStatus.SHIPPED, OrderStatus.DELIVERED}
         # Validar stock cuando se pasa de PENDING o CANCELLED a estados que requieren stock
-        return (order.status in {OrderStatus.PENDING, OrderStatus.CANCELLED} and 
+        return (order.status in {OrderStatus.PENDING, OrderStatus.CANCELLED} and
                 new_status in stock_required_states)
 
     def _handle_successful_update(self, db, order, notes, order_id, success_orders, success_details):

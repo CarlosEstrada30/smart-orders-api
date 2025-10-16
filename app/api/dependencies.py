@@ -21,10 +21,10 @@ from ..services.auth_service import AuthService
 def get_client_timezone(request: Request) -> str:
     """
     Dependency to get client timezone from request.
-    
+
     Args:
         request: FastAPI request object
-        
+
     Returns:
         str: Client timezone string
     """
@@ -34,14 +34,14 @@ def get_client_timezone(request: Request) -> str:
 def get_timezone_aware_db(
     db: Session = Depends(get_tenant_db),
     client_timezone: str = Depends(get_client_timezone)
-    ) -> Tuple[Session, str]:
+) -> Tuple[Session, str]:
     """
     Dependency that provides both database session and client timezone.
-    
+
     Args:
         db: Database session
         client_timezone: Client timezone string
-        
+
     Returns:
         tuple: (database_session, client_timezone)
     """

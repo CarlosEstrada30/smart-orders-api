@@ -4,7 +4,7 @@ from datetime import datetime
 from ..models.order import OrderStatus
 from .client import ClientResponse
 from .route import RouteResponse
-from .base import TimezoneAwareBaseModel, TimestampMixin, create_timezone_aware_datetime_field
+from .base import TimezoneAwareBaseModel, create_timezone_aware_datetime_field
 
 
 class OrderItemBase(BaseModel):

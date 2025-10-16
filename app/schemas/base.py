@@ -2,7 +2,7 @@
 Base schemas with timezone-aware datetime handling.
 """
 from datetime import datetime
-from typing import Optional, Any
+from typing import Optional
 from pydantic import BaseModel, Field
 from ..utils.timezone import convert_utc_to_client_timezone
 
@@ -11,35 +11,35 @@ class TimezoneAwareBaseModel(BaseModel):
     """
     Base model that automatically converts UTC datetime fields to client timezone.
     """
-    
+
     class Config:
         from_attributes = True
         json_encoders = {
             datetime: lambda v: v.isoformat() if v else None
         }
-    
+
     def dict(self, **kwargs) -> dict:
         """
         Override dict method to apply timezone conversion to datetime fields.
         """
         data = super().dict(**kwargs)
-        
+
         # Get client timezone from context (if available)
         client_timezone = getattr(self, '_client_timezone', None)
         if not client_timezone:
             return data
-        
+
         # Convert datetime fields to client timezone
         for key, value in data.items():
             if isinstance(value, datetime):
                 data[key] = convert_utc_to_client_timezone(value, client_timezone)
-        
+
         return data
-    
+
     def set_client_timezone(self, timezone: str):
         """
         Set the client timezone for datetime conversion.
-        
+
         Args:
             timezone: Client timezone string
         """
@@ -52,11 +52,11 @@ def create_timezone_aware_datetime_field(
 ) -> Field:
     """
     Create a datetime field that will be converted to client timezone.
-    
+
     Args:
         description: Field description
         **kwargs: Additional field arguments
-        
+
     Returns:
         Field: Pydantic field for datetime
     """
