@@ -58,8 +58,7 @@ jobs:
 
     - name: Run linter (flake8)
       run: |
-        pipenv run flake8 --count --select=E9,F63,F7,F82 --show-source --statistics
-        pipenv run flake8 --count --statistics
+        pipenv run flake8 --count
 
     - name: Run tests with pytest
       run: |
