@@ -734,13 +734,22 @@ def download_orders_report_pdf(
 
         status_enum = _parse_status_filter(status_filter)
 
+        # Get client timezone and convert date filters to UTC
+        client_timezone = get_request_timezone(request) if request else None
+        if client_timezone:
+            date_from_utc, date_to_utc = create_date_range_utc(date_from, date_to, client_timezone)
+        else:
+            # Fallback to original dates if no timezone available
+            date_from_utc = date_from
+            date_to_utc = date_to
+
         orders = _get_filtered_orders(
             order_service,
             db,
             status_enum,
             route_id,
-            date_from,
-            date_to,
+            date_from_utc,
+            date_to_utc,
             search)
         settings = _get_company_settings(settings_service, db)
         raw_orders = _get_raw_orders(db, orders)
@@ -767,9 +776,14 @@ def download_orders_report_pdf(
             headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
 
+    except HTTPException:
+        # Re-raise HTTPExceptions (like 404 for no orders found)
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Error generating orders report: {str(e)}")

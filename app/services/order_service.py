@@ -1,5 +1,5 @@
-from typing import Optional, List
-from datetime import date
+from typing import Optional, List, Union
+from datetime import date, datetime
 from sqlalchemy.orm import Session
 from ..repositories.order_repository import OrderRepository
 from ..repositories.client_repository import ClientRepository
@@ -107,8 +107,8 @@ class OrderService:
         limit: int = 100,
         status: Optional[OrderStatus] = None,
         route_id: Optional[int] = None,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
+        date_from: Optional[Union[date, datetime]] = None,
+        date_to: Optional[Union[date, datetime]] = None,
         search: Optional[str] = None
     ) -> List[OrderResponse]:
         """Get orders with optional filters for status, route, date range, and search"""

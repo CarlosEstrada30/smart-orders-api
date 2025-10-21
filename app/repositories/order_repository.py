@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Union
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 from datetime import datetime, date
@@ -201,8 +201,8 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         limit: int = 100,
         status: Optional[OrderStatus] = None,
         route_id: Optional[int] = None,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
+        date_from: Optional[Union[date, datetime]] = None,
+        date_to: Optional[Union[date, datetime]] = None,
         search: Optional[str] = None
     ) -> List[Order]:
         """Get orders with optional filters for status, route, date range, and search"""
@@ -231,16 +231,26 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             filters.append(Order.route_id == route_id)
 
         if date_from is not None:
-            # Include orders from the beginning of date_from
-            filters.append(
-                Order.created_at >= datetime.combine(
-                    date_from, datetime.min.time()))
+            # Handle both date and datetime objects
+            if isinstance(date_from, date):
+                # Include orders from the beginning of date_from
+                filters.append(
+                    Order.created_at >= datetime.combine(
+                        date_from, datetime.min.time()))
+            else:
+                # date_from is already a datetime
+                filters.append(Order.created_at >= date_from)
 
         if date_to is not None:
-            # Include orders until the end of date_to
-            filters.append(
-                Order.created_at <= datetime.combine(
-                    date_to, datetime.max.time()))
+            # Handle both date and datetime objects
+            if isinstance(date_to, date):
+                # Include orders until the end of date_to
+                filters.append(
+                    Order.created_at <= datetime.combine(
+                        date_to, datetime.max.time()))
+            else:
+                # date_to is already a datetime
+                filters.append(Order.created_at <= date_to)
 
         if search is not None and search.strip():
             # Search in order number or client name (case-insensitive)
@@ -292,16 +302,26 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             filters.append(Order.route_id == route_id)
 
         if date_from is not None:
-            # Include orders from the beginning of date_from
-            filters.append(
-                Order.created_at >= datetime.combine(
-                    date_from, datetime.min.time()))
+            # Handle both date and datetime objects
+            if isinstance(date_from, date):
+                # Include orders from the beginning of date_from
+                filters.append(
+                    Order.created_at >= datetime.combine(
+                        date_from, datetime.min.time()))
+            else:
+                # date_from is already a datetime
+                filters.append(Order.created_at >= date_from)
 
         if date_to is not None:
-            # Include orders until the end of date_to
-            filters.append(
-                Order.created_at <= datetime.combine(
-                    date_to, datetime.max.time()))
+            # Handle both date and datetime objects
+            if isinstance(date_to, date):
+                # Include orders until the end of date_to
+                filters.append(
+                    Order.created_at <= datetime.combine(
+                        date_to, datetime.max.time()))
+            else:
+                # date_to is already a datetime
+                filters.append(Order.created_at <= date_to)
 
         if search is not None and search.strip():
             # Search in order number or client name (case-insensitive)
