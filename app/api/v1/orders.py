@@ -20,7 +20,10 @@ from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
 from ...utils.date_filters import create_date_range_utc, validate_date_range
 from ...middleware import get_request_timezone
-from ...utils.permissions import can_create_orders, can_view_orders, can_update_delivery_status, can_update_stock_required_status
+from ...utils.permissions import (
+    can_create_orders, can_view_orders,
+    can_update_delivery_status, can_update_stock_required_status
+)
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -101,7 +104,7 @@ def get_orders(
 
     # Validate date range
     validate_date_range(date_from, date_to)
-    
+
     # Get client timezone and convert date filters to UTC
     client_timezone = get_request_timezone(request) if request else None
     if client_timezone:
@@ -192,8 +195,8 @@ def batch_update_order_status(
             if not can_update_stock_required_status(current_user):
                 raise HTTPException(
                     status_code=403,
-                    detail="No tienes permisos para cambiar a estados que requieren validación de stock. Se requiere rol de Vendedor o superior."
-                )
+                    detail="No tienes permisos para cambiar a estados que requieren "
+                    "validación de stock. Se requiere rol de Vendedor o superior.")
         else:
             # Para otros cambios de estado (pending, cancelled), requiere permisos básicos
             if not can_create_orders(current_user):
@@ -352,8 +355,8 @@ def update_order_status(
             if not can_update_stock_required_status(current_user):
                 raise HTTPException(
                     status_code=403,
-                    detail="No tienes permisos para cambiar a estados que requieren validación de stock. Se requiere rol de Vendedor o superior."
-                )
+                    detail="No tienes permisos para cambiar a estados que requieren "
+                    "validación de stock. Se requiere rol de Vendedor o superior.")
         else:
             # Para otros cambios de estado (pending, cancelled), requiere permisos básicos
             if not can_create_orders(current_user):
@@ -424,7 +427,7 @@ def download_order_receipt(
 
         # Get client timezone and pass to PDF generator
         client_timezone = get_request_timezone(request) if request else None
-        
+
         # Generate PDF buffer with company settings and client timezone
         pdf_buffer = receipt_generator.generate_receipt_buffer(
             order_obj, settings, client_timezone)
@@ -482,7 +485,7 @@ def preview_order_receipt(
 
         # Get client timezone and pass to PDF generator
         client_timezone = get_request_timezone(request) if request else None
-        
+
         # Generate PDF buffer with company settings and client timezone
         pdf_buffer = receipt_generator.generate_receipt_buffer(
             order_obj, settings, client_timezone)
@@ -542,7 +545,7 @@ def generate_order_receipt_file(
 
         # Get client timezone and pass to PDF generator
         client_timezone = get_request_timezone(request) if request else None
-        
+
         # Generate filename
         filename = f"comprobante_{order_obj.order_number}_{order_obj.created_at.strftime('%Y%m%d_%H%M%S')}.pdf"
         file_path = os.path.join(receipts_dir, filename)
@@ -782,8 +785,6 @@ def download_orders_report_pdf(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Error generating orders report: {str(e)}")

@@ -194,10 +194,12 @@ class ReceiptGenerator:
             created_at_client = order.created_at
             updated_at_client = order.updated_at
 
+        updated_text = (updated_at_client.strftime('%d de %B de %Y a las %H:%M')
+                        if updated_at_client else 'N/A')
         details_lines = [
             "Estado del Pedido: ",
             f"Fecha de Creación: {created_at_client.strftime('%d de %B de %Y a las %H:%M')}",
-            f"Última Actualización: {updated_at_client.strftime('%d de %B de %Y a las %H:%M') if updated_at_client else 'N/A'}",
+            f"Última Actualización: {updated_text}",
             f"Total de Productos: {len(order.items)} artículos",
         ]
 
