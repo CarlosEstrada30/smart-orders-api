@@ -3,7 +3,9 @@
 Script para poblar la base de datos con datos iniciales
 (Asume que las tablas ya fueron creadas con migraciones de Alembic)
 """
-
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.schemas.route import RouteCreate
 from app.schemas.order import OrderCreate, OrderItemCreate
 from app.schemas.product import ProductCreate
@@ -18,9 +20,6 @@ from app.services.user_service import UserService
 from app.models.order import OrderStatus
 from app.database import SessionLocal
 from sqlalchemy.orm import Session
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def populate_database():

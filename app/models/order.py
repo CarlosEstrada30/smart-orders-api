@@ -23,7 +23,7 @@ class Order(Base):
     route_id = Column(Integer, ForeignKey("routes.id"), nullable=True)
     status = Column(Enum(OrderStatus), default=OrderStatus.PENDING)
     total_amount = Column(Float, nullable=False)
-    discount_percentage = Column(Float, default=0.0)  # Descuento como porcentaje (0-100)
+    discount_amount = Column(Float, default=0.0)  # Descuento como cantidad fija de dinero
     notes = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

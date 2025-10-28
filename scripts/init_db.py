@@ -3,6 +3,11 @@
 Script para inicializar la base de datos con datos de ejemplo
 """
 
+
+from sqlalchemy.orm import Session
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.schemas.order import OrderCreate, OrderItemCreate
 from app.schemas.product import ProductCreate
 from app.schemas.client import ClientCreate
@@ -14,11 +19,6 @@ from app.services.user_service import UserService
 from app.models.order import OrderStatus
 from app.models import Base, User, Client, Product, Order, OrderItem
 from app.database import SessionLocal, engine
-from sqlalchemy.orm import Session
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 
 def init_db():
     """Inicializar la base de datos con datos de ejemplo"""
