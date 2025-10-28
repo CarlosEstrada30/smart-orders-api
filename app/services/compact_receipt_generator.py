@@ -376,15 +376,44 @@ class CompactReceiptGenerator:
         """Crea la sección de total más compacta"""
         elements = []
 
-        # Total en tabla para mejor control de layout
-        total_data = [["Total de productos:",
-                       f"{len(order.items)} tipos",
-                       "Total de unidades:",
-                       f"{sum(item.quantity for item in order.items):,}"],
-                      ["",
-                       "",
-                       "TOTAL A PAGAR:",
-                       f"Q {order.total_amount:,.2f}"]]
+        # Calcular subtotal (suma de todos los items)
+        subtotal = sum(item.total_price for item in order.items)
+
+        # Crear tabla de desglose de totales más compacta
+        total_data = []
+
+        # Información de productos
+        total_data.append([
+            "Total de productos:",
+            f"{len(order.items)} tipos",
+            "Total de unidades:",
+            f"{sum(item.quantity for item in order.items):,}"
+        ])
+
+        # Subtotal
+        total_data.append([
+            "",
+            "",
+            "Subtotal:",
+            f"Q {subtotal:,.2f}"
+        ])
+
+        # Descuento si aplica
+        if order.discount_amount and order.discount_amount > 0:
+            total_data.append([
+                "",
+                "",
+                "Descuento:",
+                f"-Q {order.discount_amount:,.2f}"
+            ])
+
+        # Total final
+        total_data.append([
+            "",
+            "",
+            "TOTAL A PAGAR:",
+            f"Q {order.total_amount:,.2f}"
+        ])
 
         # Ajustar anchos para que el texto "TOTAL A PAGAR" no se desborde
         total_table = Table(
@@ -397,17 +426,22 @@ class CompactReceiptGenerator:
             ('ALIGN', (0, 0), (1, 0), 'LEFT'),
             ('ALIGN', (2, 0), (3, 0), 'RIGHT'),
 
-            # Fila del total
-            ('FONTNAME', (2, 1), (3, 1), 'Helvetica-Bold'),
-            ('FONTSIZE', (2, 1), (3, 1), 14),
-            ('ALIGN', (2, 1), (3, 1), 'RIGHT'),
-            ('TEXTCOLOR', (2, 1), (3, 1), colors.Color(
+            # Filas de subtotal y descuento
+            ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -2), 9),
+            ('ALIGN', (2, 1), (3, -2), 'RIGHT'),
+
+            # Fila del total final
+            ('FONTNAME', (2, -1), (3, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (2, -1), (3, -1), 14),
+            ('ALIGN', (2, -1), (3, -1), 'RIGHT'),
+            ('TEXTCOLOR', (2, -1), (3, -1), colors.Color(
                 0.1, 0.1, 0.1)),  # Negro/gris muy oscuro
 
-            # Background para el total
-            ('BACKGROUND', (2, 1), (3, 1), colors.Color(
+            # Background para el total final
+            ('BACKGROUND', (2, -1), (3, -1), colors.Color(
                 0.93, 0.93, 0.93)),  # Gris claro
-            ('BOX', (2, 1), (3, 1), 1, colors.Color(
+            ('BOX', (2, -1), (3, -1), 1, colors.Color(
                 0.5, 0.5, 0.5)),  # Borde gris medio
 
             # Padding

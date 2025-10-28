@@ -492,9 +492,54 @@ class ProfessionalReceiptGenerator:
 
         elements.append(Spacer(1, 10 * mm))
 
-        # Total amount destacado
-        total_text = f"TOTAL DEL PEDIDO: Q {order.total_amount:,.2f}"
-        elements.append(Paragraph(total_text, self.styles['TotalAmount']))
+        # Calcular subtotal (suma de todos los items)
+        subtotal = sum(item.total_price for item in order.items)
+
+        # Crear tabla de desglose de totales
+        total_data = []
+
+        # Subtotal
+        total_data.append([
+            Paragraph("Subtotal:", self.styles['NormalText']),
+            Paragraph(f"Q {subtotal:,.2f}", self.styles['NormalText'])
+        ])
+
+        # Descuento si aplica
+        if order.discount_amount and order.discount_amount > 0:
+            total_data.append([
+                Paragraph("Descuento:", self.styles['NormalText']),
+                Paragraph(f"-Q {order.discount_amount:,.2f}", self.styles['NormalText'])
+            ])
+
+        # Total final
+        total_data.append([
+            Paragraph("TOTAL DEL PEDIDO:", self.styles['TotalAmount']),
+            Paragraph(f"Q {order.total_amount:,.2f}", self.styles['TotalAmount'])
+        ])
+
+        # Crear tabla de totales
+        total_table = Table(total_data, colWidths=[8 * cm, 4 * cm])
+        total_table.setStyle(TableStyle([
+            # Alineación
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+
+            # Estilos para el total final
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, -1), (-1, -1), 18),
+            ('TEXTCOLOR', (0, -1), (-1, -1), colors.Color(0.1, 0.5, 0.1)),
+
+            # Padding
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+
+            # Línea superior para el total final
+            ('LINEABOVE', (0, -1), (-1, -1), 2, colors.Color(0.1, 0.5, 0.1)),
+        ]))
+
+        elements.append(total_table)
 
         # Línea decorativa debajo del total
         elements.append(Spacer(1, 3 * mm))

@@ -304,6 +304,9 @@ class ReceiptGenerator:
         """Draw total section"""
         y = 180  # Fixed position from bottom
 
+        # Calcular subtotal (suma de todos los items)
+        subtotal = sum(item.total_price for item in order.items)
+
         # Total box
         total_x = self.width - self.margin - 180
 
@@ -325,12 +328,37 @@ class ReceiptGenerator:
 
         info_lines = [
             f"Total de artículos: {sum(item.quantity for item in order.items)} unidades",
-            f"Productos diferentes: {len(order.items)} tipos"]
+            f"Productos diferentes: {len(order.items)} tipos"
+        ]
 
         for line in info_lines:
             line_width = c.stringWidth(line, "Helvetica", 9)
             c.drawString(total_x + 180 - line_width, y, line)
             y -= 12
+
+        # Desglose de totales si hay descuento
+        if order.discount_amount and order.discount_amount > 0:
+            y -= 8
+
+            # Subtotal
+            c.setFont("Helvetica", 9)
+            subtotal_text = f"Subtotal: Q {subtotal:,.2f}"
+            subtotal_width = c.stringWidth(subtotal_text, "Helvetica", 9)
+            c.drawString(total_x + 180 - subtotal_width, y, subtotal_text)
+            y -= 12
+
+            # Descuento
+            discount_text = f"Descuento: -Q {order.discount_amount:,.2f}"
+            discount_width = c.stringWidth(discount_text, "Helvetica", 9)
+            c.drawString(total_x + 180 - discount_width, y, discount_text)
+            y -= 12
+
+            # Línea separadora
+            c.setStrokeColor(colors.grey)
+            c.setLineWidth(0.5)
+            c.line(total_x + 180 - max(subtotal_width, discount_width), y,
+                   total_x + 180, y)
+            y -= 8
 
     def _draw_footer(
             self,
