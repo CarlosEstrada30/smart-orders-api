@@ -49,7 +49,7 @@ class OrderService:
             "route_id": order.route_id,
             "status": order.status,
             "total_amount": order.total_amount,
-            "discount_percentage": order.discount_percentage,
+            "discount_amount": order.discount_amount,
             "notes": order.notes,
             "created_at": order.created_at,
             "updated_at": order.updated_at,

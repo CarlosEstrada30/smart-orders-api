@@ -92,9 +92,8 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             item.unit_price for item in order_data.items)
 
         # Apply discount if provided
-        discount_percentage = getattr(order_data, 'discount_percentage', 0.0) or 0.0
-        if discount_percentage > 0:
-            discount_amount = subtotal * (discount_percentage / 100)
+        discount_amount = getattr(order_data, 'discount_amount', 0.0) or 0.0
+        if discount_amount > 0:
             total_amount = subtotal - discount_amount
         else:
             total_amount = subtotal
@@ -106,7 +105,7 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             route_id=order_data.route_id,
             status=order_data.status,
             total_amount=total_amount,
-            discount_percentage=discount_percentage,
+            discount_amount=discount_amount,
             notes=order_data.notes
         )
         db.add(order)
@@ -165,6 +164,14 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             order.route_id = order_update.route_id
         if order_update.notes is not None:
             order.notes = order_update.notes
+        if order_update.discount_amount is not None:
+            order.discount_amount = order_update.discount_amount
+            # Recalculate total amount with new discount
+            subtotal = sum(item.quantity * item.unit_price for item in order.items)
+            if order_update.discount_amount > 0:
+                order.total_amount = subtotal - order_update.discount_amount
+            else:
+                order.total_amount = subtotal
 
         # If items are provided, replace all items
         if order_update.items is not None:
@@ -186,8 +193,16 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
                 )
                 db.add(order_item)
 
-            # Update total amount
-            order.total_amount = total_amount
+            # Apply discount to total amount
+            discount_amount = (
+                order_update.discount_amount
+                if order_update.discount_amount is not None
+                else order.discount_amount
+            )
+            if discount_amount and discount_amount > 0:
+                order.total_amount = total_amount - discount_amount
+            else:
+                order.total_amount = total_amount
 
         db.commit()
         db.refresh(order)

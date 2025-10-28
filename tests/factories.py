@@ -102,7 +102,7 @@ class OrderFactory(factory.alchemy.SQLAlchemyModelFactory):
         lambda _: round(
             faker.random.uniform(
                 100, 5000), 2))
-    discount_percentage = 0.0
+    discount_amount = 0.0
     notes = factory.LazyAttribute(lambda _: faker.text(max_nb_chars=100))
 
 

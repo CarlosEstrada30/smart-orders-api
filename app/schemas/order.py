@@ -33,7 +33,7 @@ class OrderBase(BaseModel):
     client_id: int
     route_id: Optional[int] = None
     status: OrderStatus = OrderStatus.PENDING
-    discount_percentage: Optional[float] = 0.0  # Descuento como porcentaje (0-100)
+    discount_amount: Optional[float] = 0.0  # Descuento como cantidad fija de dinero
     notes: Optional[str] = None
 
 
@@ -46,7 +46,7 @@ class OrderUpdate(BaseModel):
     client_id: Optional[int] = None
     route_id: Optional[int] = None
     status: Optional[OrderStatus] = None
-    discount_percentage: Optional[float] = None
+    discount_amount: Optional[float] = None
     notes: Optional[str] = None
     items: Optional[List[OrderItemCreate]] = None
 

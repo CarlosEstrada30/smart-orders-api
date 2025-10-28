@@ -113,7 +113,7 @@ order = OrderFactory.create(client=client)
 # Orden con datos personalizados
 order = OrderFactory.create(
     total_amount=1500.00,
-    discount_percentage=10.0,
+    discount_amount=150.0,
     status=OrderStatus.CONFIRMED
 )
 ```
