@@ -9,6 +9,7 @@ from ..schemas.order import OrderCreate, OrderResponse, OrderItemResponse, Order
 from ..schemas.pagination import PaginatedResponse
 from ..models.order import Order, OrderStatus
 from .product_service import ProductService
+from ..config import settings
 
 
 class OrderService:
@@ -230,6 +231,10 @@ class OrderService:
 
     def _validate_and_reserve_stock_on_confirm(self, db: Session, order):
         """Validate stock availability and reserve stock when confirming order"""
+        # Skip stock validation if disabled via environment variable
+        if not settings.ENABLE_STOCK_VALIDATION:
+            return True
+
         # First check if all items have sufficient stock
         insufficient_items = []
         for item in order.items:
@@ -257,6 +262,10 @@ class OrderService:
 
     def _restore_stock_on_status_change(self, db: Session, order):
         """Restore stock when order goes back to pending or cancelled"""
+        # Skip stock restoration if stock validation is disabled
+        if not settings.ENABLE_STOCK_VALIDATION:
+            return
+
         try:
             for item in order.items:
                 # Restore stock (add back the quantity)
@@ -269,6 +278,10 @@ class OrderService:
 
     def _validate_stock_availability_for_order(self, db: Session, order):
         """Validate stock availability for an order without reserving it"""
+        # Skip stock validation if disabled via environment variable
+        if not settings.ENABLE_STOCK_VALIDATION:
+            return None
+
         from ..schemas.order import OrderUpdateError, ProductError
 
         products_with_errors = []
@@ -385,13 +398,14 @@ class OrderService:
         if order.status not in [OrderStatus.PENDING, OrderStatus.CONFIRMED]:
             raise ValueError(f"Cannot cancel order with status {order.status}")
 
-        # RESTAURACIÓN DE STOCK: Solo restaurar si el estado tenía stock reservado
+        # RESTAURACIÓN DE STOCK: Solo restaurar si el estado tenía stock reservado y si está habilitado
         # Pending orders don't have stock reserved, so no need to restore
-        confirmed_states = {OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS, OrderStatus.SHIPPED, OrderStatus.DELIVERED}
-        if order.status in confirmed_states:
-            for item in order.items:
-                self.product_service.update_stock(
-                    db, item.product_id, item.quantity)
+        if settings.ENABLE_STOCK_VALIDATION:
+            confirmed_states = {OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS, OrderStatus.SHIPPED, OrderStatus.DELIVERED}
+            if order.status in confirmed_states:
+                for item in order.items:
+                    self.product_service.update_stock(
+                        db, item.product_id, item.quantity)
 
         updated_order = self.order_repository.update_order_status(
             db, order_id=order_id, status=OrderStatus.CANCELLED)

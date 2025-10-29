@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     DEFAULT_TIMEZONE: str = "America/Guatemala"  # UTC-6
     TIMEZONE_HEADER: str = "X-Timezone"
 
+    # Stock validation configuration
+    ENABLE_STOCK_VALIDATION: bool = False  # Default: False (no stock validation)
+
     def get_database_url(self) -> str:
         """
         Retorna la URL de la base de datos con parámetros SSL si es necesario
