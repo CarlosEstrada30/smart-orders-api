@@ -15,6 +15,14 @@ from ..models.settings import Settings
 from ..utils.timezone import convert_utc_to_client_timezone
 
 
+def format_quantity(quantity) -> str:
+    """Formatea una cantidad mostrando decimales solo cuando es necesario"""
+    if quantity == int(quantity):
+        return f"{int(quantity):,}"
+    else:
+        return f"{quantity:,.2f}"
+
+
 class CompactReceiptGenerator:
     """Generador compacto de comprobantes de órdenes para una sola página"""
 
@@ -321,7 +329,7 @@ class CompactReceiptGenerator:
             row = [
                 str(i),
                 product_name,
-                f"{item.quantity:,}",
+                format_quantity(item.quantity),
                 f"Q {item.unit_price:,.2f}",
                 # Con decimales y espacio después de Q
                 f"Q {item.total_price:,.2f}"
@@ -387,7 +395,7 @@ class CompactReceiptGenerator:
             "Total de productos:",
             f"{len(order.items)} tipos",
             "Total de unidades:",
-            f"{sum(item.quantity for item in order.items):,}"
+            f"{sum(float(item.quantity) for item in order.items):,}"
         ])
 
         # Subtotal

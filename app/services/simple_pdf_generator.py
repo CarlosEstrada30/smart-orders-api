@@ -9,6 +9,14 @@ from ..models.invoice import Invoice
 from ..schemas.invoice import CompanyInfo
 
 
+def format_quantity(quantity) -> str:
+    """Formatea una cantidad mostrando decimales solo cuando es necesario"""
+    if quantity == int(quantity):
+        return f"{int(quantity):,}"
+    else:
+        return f"{quantity:,.2f}"
+
+
 class SimplePDFGenerator:
     """Simple PDF generator using basic reportlab canvas to avoid compatibility issues"""
 
@@ -186,7 +194,7 @@ class SimplePDFGenerator:
             row_data = [
                 item.product.name[:25] + "..." if len(item.product.name) > 25 else item.product.name,
                 item.product.sku or "N/A",
-                f"{item.quantity:,}",
+                format_quantity(item.quantity),
                 f"Q {item.unit_price:,.2f}",
                 f"Q {item.total_price:,.2f}"
             ]

@@ -6,7 +6,7 @@ from ..models.inventory_entry import EntryType, EntryStatus
 
 class InventoryEntryItemBase(BaseModel):
     product_id: int
-    quantity: int = Field(...,
+    quantity: float = Field(...,
                           gt=0,
                           description="Quantity must be greater than 0")
     unit_cost: float = Field(
@@ -21,7 +21,7 @@ class InventoryEntryItemBase(BaseModel):
     def validate_quantity(cls, v):
         if v <= 0:
             raise ValueError('Quantity must be greater than 0')
-        return v
+        return round(v, 2)  # Redondear a 2 decimales
 
 
 class InventoryEntryItemCreate(InventoryEntryItemBase):
@@ -29,7 +29,7 @@ class InventoryEntryItemCreate(InventoryEntryItemBase):
 
 
 class InventoryEntryItemUpdate(BaseModel):
-    quantity: Optional[int] = Field(None, gt=0)
+    quantity: Optional[float] = Field(None, gt=0)
     unit_cost: Optional[float] = Field(None, ge=0)
     batch_number: Optional[str] = Field(None, max_length=100)
     expiry_date: Optional[datetime] = None
@@ -140,7 +140,7 @@ class InventoryReport(BaseModel):
     product_sku: Optional[str] = None
     current_stock: int
     total_entries: int
-    total_quantity_added: int
+    total_quantity_added: float
     last_entry_date: Optional[datetime] = None
     average_cost: float
 

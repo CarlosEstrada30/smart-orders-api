@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from datetime import datetime
 from ..models.order import OrderStatus
@@ -9,8 +9,14 @@ from .base import TimezoneAwareBaseModel, create_timezone_aware_datetime_field
 
 class OrderItemBase(BaseModel):
     product_id: int
-    quantity: int
+    quantity: float = Field(..., gt=0, description="Quantity must be greater than 0")
     unit_price: float
+
+    @validator('quantity')
+    def validate_quantity(cls, v):
+        if v <= 0:
+            raise ValueError('Quantity must be greater than 0')
+        return round(v, 2)  # Redondear a 2 decimales
 
 
 class OrderItemCreate(OrderItemBase):
@@ -129,8 +135,8 @@ class ProductError(BaseModel):
     product_sku: str
     error_type: str
     error_message: str
-    required_quantity: Optional[int] = None
-    available_quantity: Optional[int] = None
+    required_quantity: Optional[float] = None
+    available_quantity: Optional[float] = None
 
 
 class OrderUpdateError(BaseModel):

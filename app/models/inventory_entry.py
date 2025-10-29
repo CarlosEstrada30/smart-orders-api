@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Enum
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Enum, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -82,7 +82,7 @@ class InventoryEntryItem(Base):
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
 
     # Quantities
-    quantity = Column(Integer, nullable=False)
+    quantity = Column(Numeric(10, 2), nullable=False)  # 10 dígitos totales, 2 decimales
     unit_cost = Column(Float, default=0.0)  # Costo por unidad
     # Costo total (quantity * unit_cost)
     total_cost = Column(Float, default=0.0)

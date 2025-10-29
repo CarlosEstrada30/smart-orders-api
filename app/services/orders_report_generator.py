@@ -16,6 +16,14 @@ from ..models.settings import Settings
 from ..utils.timezone import convert_utc_to_client_timezone
 
 
+def format_quantity(quantity) -> str:
+    """Formatea una cantidad mostrando decimales solo cuando es necesario"""
+    if quantity == int(quantity):
+        return f"{int(quantity):,}"
+    else:
+        return f"{quantity:,.2f}"
+
+
 class OrdersReportGenerator:
     """Generador de reportes PDF para múltiples órdenes agrupadas por cliente"""
 
@@ -314,9 +322,9 @@ class OrdersReportGenerator:
 
                 # Formato: cantidad + nombre del producto
                 if hasattr(item.product, 'unit') and item.product.unit:
-                    product_text = f"{quantity} {item.product.unit} {product_name}"
+                    product_text = f"{format_quantity(quantity)} {item.product.unit} {product_name}"
                 else:
-                    product_text = f"{quantity}x {product_name}"
+                    product_text = f"{format_quantity(quantity)}x {product_name}"
 
                 # Distribuir productos en dos columnas
                 if i % 2 == 0:
@@ -511,11 +519,19 @@ class OrdersReportGenerator:
                 total_value = data['total_value']
                 unit = data.get('unit', 'unidades')
 
-                # Formatear cantidad con unidad
+                # Formatear cantidad con unidad (mostrar decimales exactos)
                 if unit and unit != 'unidades':
-                    quantity_text = f"{total_quantity:,.0f} {unit}"
+                    # Si es un número entero, mostrar sin decimales; si tiene decimales, mostrarlos
+                    if total_quantity == int(total_quantity):
+                        quantity_text = f"{int(total_quantity):,} {unit}"
+                    else:
+                        quantity_text = f"{total_quantity:,.2f} {unit}"
                 else:
-                    quantity_text = f"{total_quantity:,.0f} unidades"
+                    # Si es un número entero, mostrar sin decimales; si tiene decimales, mostrarlos
+                    if total_quantity == int(total_quantity):
+                        quantity_text = f"{int(total_quantity):,} unidades"
+                    else:
+                        quantity_text = f"{total_quantity:,.2f} unidades"
 
                 table_data.append([
                     product_name,
@@ -581,17 +597,17 @@ class OrdersReportGenerator:
                 product_name = item.product.name
                 quantity = item.quantity
                 unit_price = item.unit_price
-                subtotal = quantity * unit_price
+                subtotal = float(quantity) * unit_price
                 unit = getattr(item.product, 'unit', 'unidades')
 
                 if product_name not in product_consolidation:
                     product_consolidation[product_name] = {
-                        'total_quantity': 0,
+                        'total_quantity': 0.0,  # Cambiar a float para compatibilidad con Decimal
                         'total_value': 0.0,
                         'unit': unit
                     }
 
-                product_consolidation[product_name]['total_quantity'] += quantity
+                product_consolidation[product_name]['total_quantity'] += float(quantity)
                 product_consolidation[product_name]['total_value'] += subtotal
 
         # Ordenar por nombre del producto
