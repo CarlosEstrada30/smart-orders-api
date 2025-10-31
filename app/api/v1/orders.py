@@ -604,18 +604,41 @@ def _parse_status_filter(
 
 
 def _get_filtered_orders(order_service, db, status_enum,
-                         route_id, date_from, date_to, search):
-    """Get orders with applied filters"""
-    orders = order_service.get_orders_with_filters(
-        db,
-        skip=0,
-        limit=10000,  # Large limit to get all orders
-        status=status_enum,
-        route_id=route_id,
-        date_from=date_from,
-        date_to=date_to,
-        search=search
-    )
+                         route_id, date_from, date_to, search, exclude_cancelled=False):
+    """Get orders with applied filters
+    
+    Args:
+        exclude_cancelled: If True and status_enum is None, exclude cancelled orders
+    """
+    # If no status filter is specified and we should exclude cancelled orders,
+    # filter them out after getting the orders
+    if exclude_cancelled and status_enum is None:
+        # Get all orders without status filter
+        orders = order_service.get_orders_with_filters(
+            db,
+            skip=0,
+            limit=10000,  # Large limit to get all orders
+            status=None,  # No status filter
+            route_id=route_id,
+            date_from=date_from,
+            date_to=date_to,
+            search=search
+        )
+        # Filter out cancelled orders
+        # Compare by value to handle both enum and string representations
+        cancelled_value = OrderStatus.CANCELLED.value if hasattr(OrderStatus.CANCELLED, 'value') else str(OrderStatus.CANCELLED)
+        orders = [order for order in orders if str(order.status) != cancelled_value]
+    else:
+        orders = order_service.get_orders_with_filters(
+            db,
+            skip=0,
+            limit=10000,  # Large limit to get all orders
+            status=status_enum,
+            route_id=route_id,
+            date_from=date_from,
+            date_to=date_to,
+            search=search
+        )
 
     if not orders:
         raise HTTPException(
@@ -636,8 +659,12 @@ def _get_company_settings(settings_service, db):
     return settings
 
 
-def _get_raw_orders(db, orders):
-    """Convert order responses to raw order objects for PDF generation"""
+def _get_raw_orders(db, orders, exclude_cancelled=False):
+    """Convert order responses to raw order objects for PDF generation
+    
+    Args:
+        exclude_cancelled: If True, exclude cancelled orders from the final list
+    """
     from ...repositories.order_repository import OrderRepository
     order_repo = OrderRepository()
 
@@ -646,6 +673,13 @@ def _get_raw_orders(db, orders):
     for order_id in order_ids:
         raw_order = order_repo.get(db, order_id)
         if raw_order:
+            # Filter out cancelled orders if requested
+            # Compare status by value to handle both enum and string representations
+            if exclude_cancelled:
+                order_status_value = raw_order.status.value if hasattr(raw_order.status, 'value') else str(raw_order.status)
+                cancelled_value = OrderStatus.CANCELLED.value
+                if order_status_value == cancelled_value:
+                    continue
             raw_orders.append(raw_order)
 
     if not raw_orders:
@@ -746,6 +780,9 @@ def download_orders_report_pdf(
             date_from_utc = date_from
             date_to_utc = date_to
 
+        # Exclude cancelled orders unless explicitly filtering for cancelled status
+        exclude_cancelled = status_enum != OrderStatus.CANCELLED
+
         orders = _get_filtered_orders(
             order_service,
             db,
@@ -753,9 +790,10 @@ def download_orders_report_pdf(
             route_id,
             date_from_utc,
             date_to_utc,
-            search)
+            search,
+            exclude_cancelled=exclude_cancelled)
         settings = _get_company_settings(settings_service, db)
-        raw_orders = _get_raw_orders(db, orders)
+        raw_orders = _get_raw_orders(db, orders, exclude_cancelled=exclude_cancelled)
 
         report_title = _generate_report_title(
             status_filter, route_id, date_from, date_to, db)
