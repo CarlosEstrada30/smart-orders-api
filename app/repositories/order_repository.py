@@ -2,6 +2,7 @@ from typing import Optional, List, Union
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 from datetime import datetime, date
+from decimal import Decimal
 from .base import BaseRepository
 from ..models.order import Order, OrderItem, OrderStatus
 from ..schemas.order import OrderCreate, OrderUpdate
@@ -164,14 +165,30 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             order.route_id = order_update.route_id
         if order_update.notes is not None:
             order.notes = order_update.notes
-        if order_update.discount_amount is not None:
-            order.discount_amount = order_update.discount_amount
-            # Recalculate total amount with new discount
-            subtotal = sum(item.quantity * item.unit_price for item in order.items)
-            if order_update.discount_amount > 0:
-                order.total_amount = subtotal - order_update.discount_amount
+        
+        # Handle discount_amount update
+        # If items are being updated, discount_amount should default to 0 if not provided
+        # If items are not being updated but discount_amount is provided, update it
+        if order_update.items is not None:
+            # Items are being updated - reset discount_amount to 0 if not explicitly provided
+            if order_update.discount_amount is not None:
+                order.discount_amount = order_update.discount_amount
             else:
-                order.total_amount = subtotal
+                order.discount_amount = 0.0
+        elif order_update.discount_amount is not None:
+            # Items are not being updated, but discount_amount is provided
+            order.discount_amount = order_update.discount_amount
+            # Recalculate total amount with new discount using existing items
+            # Convert both quantity (Decimal) and unit_price (float) to Decimal for calculation
+            subtotal = sum(
+                Decimal(str(item.quantity)) * Decimal(str(item.unit_price))
+                for item in order.items
+            )
+            discount_decimal = Decimal(str(order_update.discount_amount))
+            if order_update.discount_amount > 0:
+                order.total_amount = float(subtotal - discount_decimal)
+            else:
+                order.total_amount = float(subtotal)
 
         # If items are provided, replace all items
         if order_update.items is not None:
@@ -194,13 +211,9 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
                 db.add(order_item)
 
             # Apply discount to total amount
-            discount_amount = (
-                order_update.discount_amount
-                if order_update.discount_amount is not None
-                else order.discount_amount
-            )
-            if discount_amount and discount_amount > 0:
-                order.total_amount = total_amount - discount_amount
+            # Use the discount_amount we already set above (either from update or 0.0)
+            if order.discount_amount and order.discount_amount > 0:
+                order.total_amount = total_amount - order.discount_amount
             else:
                 order.total_amount = total_amount
 
