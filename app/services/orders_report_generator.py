@@ -40,7 +40,7 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='ReportTitle',
             parent=self.styles['Heading1'],
-            fontSize=14,  # Aumentado de 10 a 14
+            fontSize=16,  # Aumentado de 14 a 16
             spaceAfter=0.5,  # Mantenido
             textColor=colors.Color(0.2, 0.2, 0.2),
             alignment=TA_CENTER,
@@ -51,7 +51,7 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='CompanyInfo',
             parent=self.styles['Normal'],
-            fontSize=6,
+            fontSize=8,
             spaceAfter=0.2,  # Reducido de 0.5 a 0.2
             textColor=colors.Color(0.3, 0.3, 0.3),
             alignment=TA_CENTER,
@@ -62,7 +62,7 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='ClientTitle',
             parent=self.styles['Heading3'],
-            fontSize=10,  # Reducido de 10 a 8
+            fontSize=12,  # Aumentado de 10 a 12
             spaceBefore=1,  # Reducido de 4 a 1
             spaceAfter=1,  # Reducido de 2 a 1
             textColor=colors.Color(0.1, 0.1, 0.1),
@@ -78,7 +78,7 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='ClientInfo',
             parent=self.styles['Normal'],
-            fontSize=7,
+            fontSize=9,
             spaceAfter=0.2,  # Reducido de 0.5 a 0.2
             textColor=colors.Color(0.4, 0.4, 0.4),
             alignment=TA_LEFT,
@@ -89,7 +89,7 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='OrderTitle',
             parent=self.styles['Normal'],
-            fontSize=8,  # Reducido de 9 a 8
+            fontSize=10,  # Aumentado de 8 a 10
             spaceBefore=2,  # Reducido de 4 a 2
             spaceAfter=1,  # Reducido de 2 a 1
             textColor=colors.Color(0.2, 0.2, 0.2),
@@ -101,10 +101,10 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='CompactText',
             parent=self.styles['Normal'],
-            fontSize=6,  # Reducido de 7 a 6
+            fontSize=8,  # Aumentado de 6 a 8
             spaceAfter=0.5,  # Reducido de 1 a 0.5
             spaceBefore=0.2,  # Reducido de 0.5 a 0.2
-            leading=6,  # Reducido de 8 a 6 para ultra compacto
+            leading=8,  # Aumentado de 6 a 8
             textColor=colors.Color(0.2, 0.2, 0.2),
             alignment=TA_LEFT,
             fontName='Helvetica'
@@ -114,7 +114,7 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='TotalText',
             parent=self.styles['Normal'],
-            fontSize=7,  # Reducido de 8 a 7
+            fontSize=9,  # Aumentado de 7 a 9
             spaceBefore=0.5,  # Reducido de 1 a 0.5
             spaceAfter=0.5,  # Reducido de 1 a 0.5
             textColor=colors.Color(0.1, 0.1, 0.1),
@@ -366,8 +366,8 @@ class OrdersReportGenerator:
 
                     # Fuente con leading reducido
                     ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 7),
-                    ('LEADING', (0, 0), (-1, -1), 8),  # Leading reducido para menos espacio entre líneas
+                    ('FONTSIZE', (0, 0), (-1, -1), 9),  # Aumentado de 7 a 9
+                    ('LEADING', (0, 0), (-1, -1), 10),  # Aumentado de 8 a 10
                 ]))
 
                 # Crear el contenido de la celda con la tabla interna
@@ -392,7 +392,7 @@ class OrdersReportGenerator:
                 created_at_client = order.created_at
 
             # Crear número de orden con fecha debajo
-            order_number_with_date = f"{order.order_number}<br/><font size='6'>{created_at_client.strftime('%d/%m/%Y')}</font>"
+            order_number_with_date = f"{order.order_number}<br/><font size='8'>{created_at_client.strftime('%d/%m/%Y')}</font>"
 
             row = [
                 Paragraph(order_number_with_date, self.styles['CompactText']),
@@ -411,14 +411,14 @@ class OrdersReportGenerator:
             ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.3, 0.3, 0.3)),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 7),  # Reducido de 8 a 7
+            ('FONTSIZE', (0, 0), (-1, 0), 9),  # Aumentado de 7 a 9
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
             ('TOPPADDING', (0, 0), (-1, 0), 4),
 
             # Data rows
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 7),  # Reducido de 8 a 7
+            ('FONTSIZE', (0, 1), (-1, -1), 9),  # Aumentado de 7 a 9
             ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # No. Orden centrado
             ('ALIGN', (1, 1), (1, -1), 'CENTER'),  # Estado centrado
             ('ALIGN', (3, 1), (3, -1), 'RIGHT'),   # Total a la derecha
@@ -548,14 +548,14 @@ class OrdersReportGenerator:
                 ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.3, 0.3, 0.3)),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 7),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),  # Aumentado de 7 a 9
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 3),
                 ('TOPPADDING', (0, 0), (-1, 0), 3),
 
                 # Data rows
                 ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 7),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),  # Aumentado de 7 a 9
                 ('ALIGN', (1, 1), (1, -1), 'CENTER'),  # Total del Producto centrado
                 ('ALIGN', (2, 1), (2, -1), 'RIGHT'),   # Valor a la derecha
                 ('VALIGN', (0, 1), (-1, -1), 'TOP'),
@@ -665,17 +665,17 @@ class OrdersReportGenerator:
             ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.3, 0.3, 0.3)),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),  # Reducido de 10 a 8
+            ('FONTSIZE', (0, 0), (-1, 0), 10),  # Aumentado de 8 a 10
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
 
             # Data rows
             ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -2), 8),  # Reducido de 9 a 8
+            ('FONTSIZE', (0, 1), (-1, -2), 10),  # Aumentado de 8 a 10
             ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
 
             # Total row
             ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, -1), (-1, -1), 9),  # Reducido de 11 a 9
+            ('FONTSIZE', (0, -1), (-1, -1), 11),  # Aumentado de 9 a 11
             ('BACKGROUND', (0, -1), (-1, -1), colors.Color(0.9, 0.9, 0.9)),
             ('LINEABOVE', (0, -1), (-1, -1), 2, colors.Color(0.3, 0.3, 0.3)),
 
