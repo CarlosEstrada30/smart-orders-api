@@ -676,6 +676,20 @@ class OrderService:
                                       f"Order {order_id} not found", failed_orders, failed_details)
                 return
 
+            # Reject updates to cancelled orders to prevent errors
+            order_status_value = order.status.value if hasattr(order.status, 'value') else str(order.status)
+            cancelled_value = OrderStatus.CANCELLED.value
+            if order_status_value == cancelled_value:
+                self._add_order_error(
+                    order_id,
+                    order.order_number,
+                    "cancelled_order",
+                    f"No se puede cambiar el estado de la orden {order.order_number} porque está cancelada. Las órdenes canceladas no pueden cambiar de estado.",
+                    failed_orders,
+                    failed_details
+                )
+                return
+
             # Check if this is a stock-requiring transition
             if self._requires_stock_validation(order, new_status):
                 stock_error = self._validate_stock_availability_for_order(db, order)
