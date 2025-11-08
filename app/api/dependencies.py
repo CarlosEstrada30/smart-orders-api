@@ -16,6 +16,7 @@ from ..services.inventory_entry_service import InventoryEntryService
 from ..services.settings_service import SettingsService
 from ..services.tenant_service import TenantService
 from ..services.auth_service import AuthService
+from ..services.ai_service import AIService
 
 
 def get_client_timezone(request: Request) -> str:
@@ -97,3 +98,8 @@ def get_tenant_service() -> TenantService:
 def get_auth_service() -> AuthService:
     """Get AuthService instance"""
     return AuthService()
+
+
+def get_ai_service() -> AIService:
+    """Get AIService instance"""
+    return AIService()
