@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # Stock validation configuration
     ENABLE_STOCK_VALIDATION: bool = False  # Default: False (no stock validation)
 
+    # OpenAI configuration
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-4o-mini"  # Default model for AI queries
+
     def get_database_url(self) -> str:
         """
         Retorna la URL de la base de datos con parámetros SSL si es necesario
