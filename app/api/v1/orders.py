@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from io import BytesIO
+import logging
 from ...schemas.order import (
     OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate,
     OrderAnalyticsSummary, StatusDistributionSummary,
@@ -16,10 +17,13 @@ from ...services.compact_receipt_generator import CompactReceiptGenerator
 from ...services.orders_report_generator import OrdersReportGenerator
 from ...services.settings_service import SettingsService
 from ...services.payment_service import PaymentService
+from ...services.whatsapp_service import WhatsAppService
 from ...models.order import OrderStatus
 from ...models.payment import OrderPaymentStatus
-from ..dependencies import get_order_service, get_settings_service, get_payment_service
+from ..dependencies import get_order_service, get_settings_service, get_payment_service, get_whatsapp_service
 from .auth import get_current_active_user, get_tenant_db
+from .settings import get_current_tenant
+from ...models.tenant import Tenant
 from ...models.user import User
 from ...utils.date_filters import validate_date_range
 from ...middleware import get_request_timezone
@@ -632,6 +636,137 @@ def generate_order_receipt_file(
     except Exception as e:
         raise HTTPException(status_code=500,
                             detail=f"Error generating receipt: {str(e)}")
+
+
+@router.post("/{order_id}/receipt/send-whatsapp")
+def send_order_receipt_whatsapp(
+    order_id: int,
+    message: Optional[str] = Query(
+        None,
+        description=(
+            "Mensaje personalizado para acompañar el comprobante. "
+            "Si no se proporciona, se usará un mensaje por defecto."
+        )
+    ),
+    db: Session = Depends(get_tenant_db),
+    order_service: OrderService = Depends(get_order_service),
+    settings_service: SettingsService = Depends(get_settings_service),
+    whatsapp_service: WhatsAppService = Depends(get_whatsapp_service),
+    current_user: User = Depends(get_current_active_user),
+    current_tenant: Optional[Tenant] = Depends(get_current_tenant),
+    request: Request = None
+):
+    """
+    Envía el comprobante de orden por WhatsApp al cliente (requires authentication)
+
+    El comprobante se envía al número de teléfono registrado del cliente.
+    Si no se proporciona un mensaje personalizado, se usa un mensaje por defecto.
+
+    Requisitos:
+    - El cliente debe tener un número de teléfono registrado
+    - EvolutionAPI debe estar configurado correctamente
+    """
+    try:
+        # Get order
+        order = order_service.get_order(db, order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        # Get order object for PDF generation and client info
+        from ...repositories.order_repository import OrderRepository
+        order_repo = OrderRepository()
+        order_obj = order_repo.get(db, order_id)
+
+        if not order_obj:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        # Validar que el cliente tenga número de teléfono
+        if not order_obj.client or not order_obj.client.phone:
+            raise HTTPException(
+                status_code=400,
+                detail="El cliente no tiene un número de teléfono registrado. "
+                       "Por favor, actualice la información del cliente antes de enviar el comprobante."
+            )
+
+        # Get company settings
+        settings = settings_service.get_company_settings(db)
+        if not settings:
+            raise HTTPException(
+                status_code=404,
+                detail="Company settings not found. Please configure company information first."
+            )
+
+        # Create receipt generator
+        receipt_generator = CompactReceiptGenerator()
+
+        # Get client timezone and pass to PDF generator
+        client_timezone = get_request_timezone(request) if request else None
+
+        # Generate PDF buffer in memory
+        pdf_buffer = receipt_generator.generate_receipt_buffer(
+            order_obj, settings, client_timezone)
+
+        # Generate filename
+        filename = f"comprobante_{order_obj.order_number}.pdf"
+
+        # Prepare WhatsApp message (caption)
+        if not message:
+            message = (
+                f"¡Hola {order_obj.client.name}!\n\n"
+                f"Adjunto el comprobante de tu pedido #{order_obj.order_number}.\n\n"
+                f"Gracias por tu preferencia."
+            )
+
+        # Get client phone number and clean it
+        client_phone = order_obj.client.phone.strip()
+
+        # Remove common phone number formatting characters
+        client_phone = client_phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "").replace("+", "")
+
+        if not client_phone.startswith("502"):
+            client_phone = "502" + client_phone
+
+        # Validar que existe un tenant con schema_name
+        if not current_tenant or not current_tenant.schema_name:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo determinar la instancia de WhatsApp. "
+                       "El tenant no está configurado correctamente."
+            )
+
+        # Get instance_name from tenant schema
+        instance_name = current_tenant.schema_name
+
+        # Send document via WhatsApp using tenant_schema as instance_name
+        whatsapp_response = whatsapp_service.send_document(
+            to=client_phone,
+            file_buffer=pdf_buffer,
+            filename=filename,
+            instance_name=instance_name,
+            caption=message
+        )
+
+        return {
+            "message": "Comprobante enviado exitosamente por WhatsApp",
+            "order_id": order_id,
+            "order_number": order_obj.order_number,
+            "client_name": order_obj.client.name,
+            "client_phone": client_phone,
+            "whatsapp_response": whatsapp_response
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        # Re-raise HTTPExceptions (like 404, 400)
+        raise
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error enviando comprobante por WhatsApp: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error enviando comprobante por WhatsApp: {str(e)}"
+        )
 
 
 # ===== REPORTE DE ÓRDENES EN PDF =====
