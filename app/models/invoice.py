@@ -19,6 +19,7 @@ class InvoiceStatus(str, enum.Enum):
 class PaymentMethod(str, enum.Enum):
     CASH = "cash"
     CREDIT_CARD = "credit_card"
+    DEBIT_CARD = "debit_card"  # Added for Payment model compatibility
     BANK_TRANSFER = "bank_transfer"
     CHECK = "check"
     OTHER = "other"

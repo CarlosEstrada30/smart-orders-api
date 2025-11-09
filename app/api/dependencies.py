@@ -16,6 +16,12 @@ from ..services.inventory_entry_service import InventoryEntryService
 from ..services.settings_service import SettingsService
 from ..services.tenant_service import TenantService
 from ..services.auth_service import AuthService
+from ..services.payment_service import PaymentService
+
+
+def get_payment_service() -> PaymentService:
+    """Get PaymentService instance"""
+    return PaymentService()
 
 
 def get_client_timezone(request: Request) -> str:

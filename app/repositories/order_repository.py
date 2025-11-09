@@ -107,7 +107,8 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             status=order_data.status,
             total_amount=total_amount,
             discount_amount=discount_amount,
-            notes=order_data.notes
+            notes=order_data.notes,
+            balance_due=total_amount  # Inicializar balance_due igual a total_amount
         )
         db.add(order)
         db.flush()  # Get the order ID

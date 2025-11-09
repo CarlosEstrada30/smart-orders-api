@@ -61,6 +61,9 @@ class OrderResponse(OrderBase, TimezoneAwareBaseModel):
     id: int
     order_number: str
     total_amount: float
+    paid_amount: Optional[float] = 0.0  # Monto total pagado
+    balance_due: Optional[float] = None  # Saldo pendiente
+    payment_status: Optional[str] = None  # Estado de pago (unpaid, partial, paid)
     created_at: datetime = create_timezone_aware_datetime_field(
         description="Fecha y hora de creación (en zona horaria del cliente)"
     )
