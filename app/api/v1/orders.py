@@ -9,20 +9,23 @@ from ...schemas.order import (
     OrderAnalyticsSummary, StatusDistributionSummary,
     BatchOrderUpdateRequest, BatchOrderUpdateResponse
 )
+from ...schemas.payment import PaymentResponse, OrderPaymentSummary
 from ...schemas.pagination import PaginatedResponse
 from ...services.order_service import OrderService
 from ...services.compact_receipt_generator import CompactReceiptGenerator
 from ...services.orders_report_generator import OrdersReportGenerator
 from ...services.settings_service import SettingsService
+from ...services.payment_service import PaymentService
 from ...models.order import OrderStatus
-from ..dependencies import get_order_service, get_settings_service
+from ..dependencies import get_order_service, get_settings_service, get_payment_service
 from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
 from ...utils.date_filters import validate_date_range
 from ...middleware import get_request_timezone
 from ...utils.permissions import (
     can_create_orders, can_view_orders,
-    can_update_delivery_status, can_update_stock_required_status
+    can_update_delivery_status, can_update_stock_required_status,
+    can_view_payments
 )
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -385,6 +388,51 @@ def get_orders_by_client(
     orders = order_service.get_orders_by_client(
         db, client_id, skip=skip, limit=limit)
     return orders
+
+
+# ===== ENDPOINTS DE PAGOS DE ÓRDENES =====
+
+@router.get("/{order_id}/payments", response_model=List[PaymentResponse])
+def get_order_payments(
+    order_id: int,
+    only_confirmed: bool = Query(True, description="Solo mostrar pagos confirmados"),
+    db: Session = Depends(get_tenant_db),
+    payment_service: PaymentService = Depends(get_payment_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Obtener todos los pagos de una orden (requiere permiso de ver pagos)"""
+    # Verificar permisos
+    if not can_view_payments(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver pagos."
+        )
+
+    payments = payment_service.get_payments_by_order(
+        db, order_id=order_id, only_confirmed=only_confirmed
+    )
+    return payments
+
+
+@router.get("/{order_id}/payment-summary", response_model=OrderPaymentSummary)
+def get_order_payment_summary(
+    order_id: int,
+    db: Session = Depends(get_tenant_db),
+    payment_service: PaymentService = Depends(get_payment_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Obtener resumen completo de pagos de una orden (requiere permiso de ver pagos)"""
+    # Verificar permisos
+    if not can_view_payments(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver pagos."
+        )
+
+    summary = payment_service.get_order_payment_summary(db, order_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    return summary
 
 
 # ===== COMPROBANTES DE ÓRDENES =====
