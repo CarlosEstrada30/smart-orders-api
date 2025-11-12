@@ -1,11 +1,11 @@
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Tuple
 from datetime import date, datetime
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from ..repositories.payment_repository import PaymentRepository
 from ..repositories.order_repository import OrderRepository
 from ..schemas.payment import (
-    PaymentCreate, PaymentResponse, OrderPaymentSummary
+    PaymentCreate, PaymentResponse, OrderPaymentSummary, BulkPaymentResponse, PaymentError
 )
 from ..models.payment import Payment, PaymentStatus, OrderPaymentStatus
 from ..models.order import Order
@@ -283,4 +283,117 @@ class PaymentService:
             raise ValueError("Orden no encontrada")
 
         return self._calculate_order_balance(db, order)
+
+    def _get_order_info_for_error(
+        self,
+        db: Session,
+        order_id: int
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """Obtener número de orden y nombre del cliente para errores"""
+        try:
+            order = self.order_repository.get(db, order_id)
+            if order:
+                order_number = order.order_number
+                client_name = order.client.name if order.client else None
+                return order_number, client_name
+        except Exception:
+            pass
+        return None, None
+
+    def create_bulk_payments(
+        self,
+        db: Session,
+        payments_data: List[PaymentCreate],
+        created_by_user_id: Optional[int] = None
+    ) -> BulkPaymentResponse:
+        """Crear múltiples pagos en un solo request y actualizar órdenes automáticamente"""
+        if not payments_data:
+            raise ValueError("Debe proporcionar al menos un pago")
+
+        created_payments: List[PaymentResponse] = []
+        payment_errors: List[PaymentError] = []
+        total_amount = 0.0
+        orders_to_update = set()  # Para rastrear órdenes que necesitan actualización
+
+        # Validar y crear cada pago
+        for payment_data in payments_data:
+            try:
+                # Validar orden
+                order = self._validate_order_for_payment(db, payment_data.order_id)
+                orders_to_update.add(order.id)
+
+                # Validar monto del pago
+                if not self._validate_payment_amount(db, order, payment_data.amount):
+                    order_number, client_name = self._get_order_info_for_error(db, payment_data.order_id)
+                    payment_errors.append(PaymentError(
+                        order_id=payment_data.order_id,
+                        order_number=order_number,
+                        client_name=client_name,
+                        amount=payment_data.amount,
+                        payment_method=payment_data.payment_method,
+                        reason="El monto del pago debe ser mayor a 0",
+                        notes=payment_data.notes
+                    ))
+                    continue
+
+                # Crear pago (status=CONFIRMED por defecto)
+                payment = self.payment_repository.create_payment(
+                    db,
+                    payment_data=payment_data,
+                    created_by_user_id=created_by_user_id
+                )
+
+                # Procesar respuesta
+                payment_response = self._process_payment_response(payment)
+                created_payments.append(payment_response)
+                total_amount += float(payment.amount)
+
+            except ValueError as e:
+                # Capturar error de validación con información detallada
+                order_number, client_name = self._get_order_info_for_error(db, payment_data.order_id)
+                payment_errors.append(PaymentError(
+                    order_id=payment_data.order_id,
+                    order_number=order_number,
+                    client_name=client_name,
+                    amount=payment_data.amount,
+                    payment_method=payment_data.payment_method,
+                    reason=str(e),
+                    notes=payment_data.notes
+                ))
+                continue
+            except Exception as e:
+                # Para otros errores, también capturar información
+                order_number, client_name = self._get_order_info_for_error(db, payment_data.order_id)
+                payment_errors.append(PaymentError(
+                    order_id=payment_data.order_id,
+                    order_number=order_number,
+                    client_name=client_name,
+                    amount=payment_data.amount,
+                    payment_method=payment_data.payment_method,
+                    reason=f"Error inesperado: {str(e)}",
+                    notes=payment_data.notes
+                ))
+                continue
+
+        # Actualizar estado de pago de todas las órdenes afectadas
+        for order_id in orders_to_update:
+            try:
+                order = self.order_repository.get(db, order_id)
+                if order:
+                    self._update_order_payment_status(db, order)
+            except Exception:
+                # Si falla la actualización de una orden, continuar con las demás
+                continue
+
+        # Commit de todos los cambios
+        db.commit()
+
+        return BulkPaymentResponse(
+            payments=created_payments,
+            total_payments=len(payments_data),
+            total_amount=total_amount,
+            success_count=len(created_payments),
+            failed_count=len(payment_errors),
+            errors=payment_errors
+        )
 

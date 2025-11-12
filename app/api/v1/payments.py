@@ -3,7 +3,7 @@ from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from ...schemas.payment import (
-    PaymentCreate, PaymentResponse, OrderPaymentSummary
+    PaymentCreate, PaymentResponse, OrderPaymentSummary, BulkPaymentCreate, BulkPaymentResponse
 )
 from ...schemas.pagination import PaginatedResponse
 from ...services.payment_service import PaymentService
@@ -125,6 +125,38 @@ def get_payment(
     if not payment:
         raise HTTPException(status_code=404, detail="Pago no encontrado")
     return payment
+
+
+@router.post("/bulk", response_model=BulkPaymentResponse,
+             status_code=status.HTTP_201_CREATED)
+def create_bulk_payments(
+    bulk_payment: BulkPaymentCreate,
+    db: Session = Depends(get_tenant_db),
+    payment_service: PaymentService = Depends(get_payment_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Crear múltiples pagos en un solo request (requiere rol de Vendedor o superior)
+    
+    Permite pagar múltiples órdenes en una sola transacción. Si algunos pagos fallan,
+    los pagos válidos se procesarán y se reportarán los que fallaron.
+    """
+    # Verificar permisos
+    if not can_manage_payments(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para crear pagos. Se requiere rol de Vendedor o superior."
+        )
+
+    try:
+        return payment_service.create_bulk_payments(
+            db,
+            payments_data=bulk_payment.payments,
+            created_by_user_id=current_user.id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al procesar pagos: {str(e)}")
 
 
 @router.post("/{payment_id}/cancel", response_model=PaymentResponse)

@@ -68,3 +68,41 @@ class OrderPaymentSummary(BaseModel):
     class Config:
         from_attributes = True
 
+
+class BulkPaymentCreate(BaseModel):
+    """Schema para crear múltiples pagos en un solo request"""
+    payments: List[PaymentCreate] = Field(..., min_items=1, description="Lista de pagos a crear")
+
+    @validator('payments')
+    def validate_payments(cls, v):
+        if not v or len(v) == 0:
+            raise ValueError('Debe proporcionar al menos un pago')
+        return v
+
+
+class PaymentError(BaseModel):
+    """Información sobre un pago que falló"""
+    order_id: int = Field(..., description="ID de la orden que no se pudo procesar")
+    order_number: Optional[str] = Field(None, description="Número de la orden (si existe)")
+    client_name: Optional[str] = Field(None, description="Nombre del cliente (si la orden existe)")
+    amount: float = Field(..., description="Monto del pago que falló")
+    payment_method: PaymentMethod = Field(..., description="Método de pago intentado")
+    reason: str = Field(..., description="Razón por la cual falló el pago")
+    notes: Optional[str] = Field(None, description="Notas del pago que falló")
+
+    class Config:
+        from_attributes = True
+
+
+class BulkPaymentResponse(BaseModel):
+    """Respuesta para pagos múltiples"""
+    payments: List[PaymentResponse] = Field(..., description="Lista de pagos creados exitosamente")
+    total_payments: int = Field(..., description="Total de pagos enviados en la solicitud")
+    total_amount: float = Field(..., description="Monto total de todos los pagos creados exitosamente")
+    success_count: int = Field(..., description="Número de pagos creados exitosamente")
+    failed_count: int = Field(default=0, description="Número de pagos que fallaron")
+    errors: List[PaymentError] = Field(default_factory=list, description="Lista detallada de pagos que fallaron con su razón")
+
+    class Config:
+        from_attributes = True
+
