@@ -105,4 +105,3 @@ class BulkPaymentResponse(BaseModel):
 
     class Config:
         from_attributes = True
-

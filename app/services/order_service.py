@@ -8,6 +8,7 @@ from ..repositories.route_repository import RouteRepository
 from ..schemas.order import OrderCreate, OrderResponse, OrderItemResponse, OrderUpdate
 from ..schemas.pagination import PaginatedResponse
 from ..models.order import Order, OrderStatus
+from ..models.payment import OrderPaymentStatus
 from .product_service import ProductService
 from ..config import settings
 
@@ -29,8 +30,8 @@ class OrderService:
                 "order_id": item.order_id,
                 "product_id": item.product_id,
                 "quantity": item.quantity,
-                "unit_price": item.unit_price,
-                "total_price": item.total_price,
+                "unit_price": round(item.unit_price, 2),  # Redondear a 2 decimales
+                "total_price": round(item.total_price, 2),  # Redondear a 2 decimales
                 "product_name": item.product.name if item.product else None,
                 "product_sku": item.product.sku if item.product else None,
                 "product_description": item.product.description if item.product else None}
@@ -49,8 +50,8 @@ class OrderService:
             "client_id": order.client_id,
             "route_id": order.route_id,
             "status": order.status,
-            "total_amount": order.total_amount,
-            "discount_amount": order.discount_amount,
+            "total_amount": round(order.total_amount, 2),  # Redondear a 2 decimales para evitar errores de precisión
+            "discount_amount": round(order.discount_amount, 2) if order.discount_amount else 0.0,
             "notes": order.notes,
             "paid_amount": float(order.paid_amount) if order.paid_amount else 0.0,
             "balance_due": float(order.balance_due) if order.balance_due is not None else None,
@@ -114,9 +115,10 @@ class OrderService:
         date_from: Optional[Union[date, datetime]] = None,
         date_to: Optional[Union[date, datetime]] = None,
         search: Optional[str] = None,
-        client_timezone: Optional[str] = None
+        client_timezone: Optional[str] = None,
+        payment_status: Optional[OrderPaymentStatus] = None
     ) -> List[OrderResponse]:
-        """Get orders with optional filters for status, route, date range, and search"""
+        """Get orders with optional filters for status, route, date range, search, and payment status"""
         orders = self.order_repository.get_orders_with_filters(
             db,
             skip=skip,
@@ -126,7 +128,8 @@ class OrderService:
             date_from=date_from,
             date_to=date_to,
             search=search,
-            client_timezone=client_timezone
+            client_timezone=client_timezone,
+            payment_status=payment_status
         )
         return [self._process_order_response(order) for order in orders]
 
@@ -140,11 +143,12 @@ class OrderService:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
         search: Optional[str] = None,
-        client_timezone: Optional[str] = None
+        client_timezone: Optional[str] = None,
+        payment_status: Optional[OrderPaymentStatus] = None
     ) -> PaginatedResponse[OrderResponse]:
         """Get orders with pagination metadata"""
         # Check if any filters are applied
-        has_filters = any([status, route_id, date_from, date_to, search])
+        has_filters = any([status, route_id, date_from, date_to, search, payment_status])
 
         if has_filters:
             # Use filtered method
@@ -157,7 +161,8 @@ class OrderService:
                 date_from=date_from,
                 date_to=date_to,
                 search=search,
-                client_timezone=client_timezone
+                client_timezone=client_timezone,
+                payment_status=payment_status
             )
 
             # Get total count with same filters
@@ -168,7 +173,8 @@ class OrderService:
                 date_from=date_from,
                 date_to=date_to,
                 search=search,
-                client_timezone=client_timezone
+                client_timezone=client_timezone,
+                payment_status=payment_status
             )
         else:
             # Use unfiltered method
@@ -688,11 +694,16 @@ class OrderService:
             order_status_value = order.status.value if hasattr(order.status, 'value') else str(order.status)
             cancelled_value = OrderStatus.CANCELLED.value
             if order_status_value == cancelled_value:
+                error_msg = (
+                    f"No se puede cambiar el estado de la orden {order.order_number} "
+                    f"porque está cancelada. Las órdenes canceladas no pueden cambiar "
+                    f"de estado."
+                )
                 self._add_order_error(
                     order_id,
                     order.order_number,
                     "cancelled_order",
-                    f"No se puede cambiar el estado de la orden {order.order_number} porque está cancelada. Las órdenes canceladas no pueden cambiar de estado.",
+                    error_msg,
                     failed_orders,
                     failed_details
                 )

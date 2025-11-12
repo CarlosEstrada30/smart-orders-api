@@ -31,8 +31,13 @@ class Order(Base):
 
     # Payment tracking fields
     paid_amount = Column(Numeric(10, 2), default=0.0)  # Monto total pagado
-    balance_due = Column(Numeric(10, 2), default=0.0)  # Saldo pendiente (se inicializa igual a total_amount)
-    payment_status = Column(Enum(OrderPaymentStatus, values_callable=lambda x: [e.value for e in x]), default=OrderPaymentStatus.UNPAID)  # Estado de pago de la orden
+    # Saldo pendiente (se inicializa igual a total_amount)
+    balance_due = Column(Numeric(10, 2), default=0.0)
+    # Estado de pago de la orden
+    payment_status = Column(
+        Enum(OrderPaymentStatus, values_callable=lambda x: [e.value for e in x]),
+        default=OrderPaymentStatus.UNPAID
+    )
 
     # Relationships
     client = relationship("Client", back_populates="orders")

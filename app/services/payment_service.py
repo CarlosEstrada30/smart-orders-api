@@ -1,6 +1,6 @@
 from typing import Optional, List, Union, Tuple
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy.orm import Session
 from ..repositories.payment_repository import PaymentRepository
 from ..repositories.order_repository import OrderRepository
@@ -39,9 +39,14 @@ class PaymentService:
             db, order_id=order.id
         )
 
-        total_paid = summary['total_paid']
-        total_amount = float(order.total_amount)
+        # Usar Decimal para cálculos precisos y redondear a 2 decimales
+        total_paid = Decimal(str(summary['total_paid']))
+        total_amount = Decimal(str(order.total_amount))
         balance_due = total_amount - total_paid
+
+        # Redondear a 2 decimales para evitar errores de precisión
+        total_paid = float(total_paid.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+        balance_due = float(balance_due.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
 
         return {
             'paid_amount': total_paid,
@@ -58,12 +63,17 @@ class PaymentService:
 
         paid_amount = balance_info['paid_amount']
         balance_due = balance_info['balance_due']
-        total_amount = float(order.total_amount)
 
         # Determinar estado de pago
-        if balance_due <= 0:
+        # Redondear balance_due a 2 decimales antes de comparar para evitar errores de precisión
+        balance_due_rounded = round(balance_due, 2)
+
+        # Si el balance_due redondeado es menor o igual a 0, considerar como pagado completamente
+        if balance_due_rounded <= 0:
             payment_status = OrderPaymentStatus.PAID
-        elif paid_amount > 0 and balance_due > 0:
+            # Asegurar que balance_due sea exactamente 0 cuando está pagado
+            balance_due = 0.0
+        elif paid_amount > 0 and balance_due_rounded > 0:
             payment_status = OrderPaymentStatus.PARTIAL
         else:
             payment_status = OrderPaymentStatus.UNPAID
@@ -85,9 +95,6 @@ class PaymentService:
         payment_amount: float
     ) -> bool:
         """Validar que el monto del pago no exceda el saldo pendiente"""
-        balance_info = self._calculate_order_balance(db, order)
-        balance_due = balance_info['balance_due']
-
         # Permitir pagos hasta el saldo pendiente
         # Si el pago es mayor, se considerará como overpayment (se manejará como PAID)
         return payment_amount > 0
@@ -264,7 +271,7 @@ class PaymentService:
         return OrderPaymentSummary(
             order_id=order.id,
             order_number=order.order_number,
-            total_amount=float(order.total_amount),
+            total_amount=round(float(order.total_amount), 2),  # Redondear a 2 decimales
             paid_amount=balance_info['paid_amount'],
             balance_due=balance_info['balance_due'],
             payment_status=order.payment_status or OrderPaymentStatus.UNPAID,
@@ -396,4 +403,3 @@ class PaymentService:
             failed_count=len(payment_errors),
             errors=payment_errors
         )
-

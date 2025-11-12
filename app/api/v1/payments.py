@@ -1,11 +1,10 @@
-from typing import List, Optional, Union
-from datetime import date, datetime
+from typing import List, Optional
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from ...schemas.payment import (
-    PaymentCreate, PaymentResponse, OrderPaymentSummary, BulkPaymentCreate, BulkPaymentResponse
+    PaymentCreate, PaymentResponse, BulkPaymentCreate, BulkPaymentResponse
 )
-from ...schemas.pagination import PaginatedResponse
 from ...services.payment_service import PaymentService
 from ...models.payment import PaymentStatus
 from ..dependencies import get_payment_service
@@ -136,7 +135,7 @@ def create_bulk_payments(
     current_user: User = Depends(get_current_active_user)
 ):
     """Crear múltiples pagos en un solo request (requiere rol de Vendedor o superior)
-    
+
     Permite pagar múltiples órdenes en una sola transacción. Si algunos pagos fallan,
     los pagos válidos se procesarán y se reportarán los que fallaron.
     """
@@ -181,4 +180,3 @@ def cancel_payment(
         return payment
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-

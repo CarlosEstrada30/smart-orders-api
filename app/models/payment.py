@@ -2,18 +2,13 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
-import uuid
 from ..database import Base
+from .invoice import PaymentMethod
 
 
 class PaymentStatus(str, enum.Enum):
     CONFIRMED = "confirmed"       # Pago confirmado (por defecto al crear)
     CANCELLED = "cancelled"       # Pago cancelado
-
-
-# Reuse PaymentMethod from Invoice model to avoid enum conflicts
-# Import it from invoice module
-from .invoice import PaymentMethod
 
 
 class OrderPaymentStatus(str, enum.Enum):
@@ -48,5 +43,3 @@ class Payment(Base):
     # Relationships
     order = relationship("Order", back_populates="payments")
     created_by = relationship("User")
-
-

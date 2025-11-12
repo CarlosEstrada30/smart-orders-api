@@ -2,7 +2,6 @@ from typing import Optional, List, Union
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, func
 from datetime import datetime, date
-from decimal import Decimal
 from .base import BaseRepository
 from ..models.payment import Payment, PaymentStatus
 from ..schemas.payment import PaymentCreate
@@ -198,4 +197,3 @@ class PaymentRepository(BaseRepository[Payment, PaymentCreate, dict]):
             'total_paid': total_paid,
             'payment_count': payment_count
         }
-

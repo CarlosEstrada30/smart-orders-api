@@ -5,6 +5,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from .base import BaseRepository
 from ..models.order import Order, OrderItem, OrderStatus
+from ..models.payment import OrderPaymentStatus
 from ..schemas.order import OrderCreate, OrderUpdate
 import uuid
 
@@ -87,17 +88,23 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         # Generate unique order number
         order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
 
-        # Calculate total amount
+        # Calculate total amount using Decimal for precision
+        from decimal import Decimal, ROUND_HALF_UP
         subtotal = sum(
-            item.quantity *
-            item.unit_price for item in order_data.items)
+            Decimal(str(item.quantity)) *
+            Decimal(str(item.unit_price)) for item in order_data.items)
 
         # Apply discount if provided
         discount_amount = getattr(order_data, 'discount_amount', 0.0) or 0.0
+        discount_decimal = Decimal(str(discount_amount))
         if discount_amount > 0:
-            total_amount = subtotal - discount_amount
+            total_amount = subtotal - discount_decimal
         else:
             total_amount = subtotal
+
+        # Round to 2 decimal places
+        total_amount = float(total_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+        discount_amount = float(discount_decimal.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
 
         # Create order
         order = Order(
@@ -115,12 +122,17 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
 
         # Create order items
         for item_data in order_data.items:
+            # Calculate total_price with proper rounding
+            item_total = Decimal(str(item_data.quantity)) * Decimal(str(item_data.unit_price))
+            item_total = float(item_total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+            unit_price = float(Decimal(str(item_data.unit_price)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+
             order_item = OrderItem(
                 order_id=order.id,
                 product_id=item_data.product_id,
                 quantity=item_data.quantity,
-                unit_price=item_data.unit_price,
-                total_price=item_data.quantity * item_data.unit_price
+                unit_price=unit_price,
+                total_price=item_total
             )
             db.add(order_item)
 
@@ -166,7 +178,7 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             order.route_id = order_update.route_id
         if order_update.notes is not None:
             order.notes = order_update.notes
-        
+
         # Handle discount_amount update
         # If items are being updated, discount_amount should default to 0 if not provided
         # If items are not being updated but discount_amount is provided, update it
@@ -181,42 +193,58 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             order.discount_amount = order_update.discount_amount
             # Recalculate total amount with new discount using existing items
             # Convert both quantity (Decimal) and unit_price (float) to Decimal for calculation
+            from decimal import ROUND_HALF_UP
             subtotal = sum(
                 Decimal(str(item.quantity)) * Decimal(str(item.unit_price))
                 for item in order.items
             )
             discount_decimal = Decimal(str(order_update.discount_amount))
             if order_update.discount_amount > 0:
-                order.total_amount = float(subtotal - discount_decimal)
+                total_amount = subtotal - discount_decimal
             else:
-                order.total_amount = float(subtotal)
+                total_amount = subtotal
+            # Round to 2 decimal places
+            order.total_amount = float(total_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+            order.discount_amount = float(discount_decimal.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
 
         # If items are provided, replace all items
         if order_update.items is not None:
             # Delete existing items
             db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
 
-            # Create new items
-            total_amount = 0
+            # Create new items with proper rounding
+            from decimal import ROUND_HALF_UP
+            total_amount = Decimal('0')
             for item_data in order_update.items:
-                item_total = item_data.quantity * item_data.unit_price
+                item_total = Decimal(str(item_data.quantity)) * Decimal(str(item_data.unit_price))
                 total_amount += item_total
+
+                # Round item values
+                item_total_rounded = float(
+                    item_total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                )
+                unit_price_rounded = float(
+                    Decimal(str(item_data.unit_price)).quantize(
+                        Decimal('0.01'), rounding=ROUND_HALF_UP
+                    )
+                )
 
                 order_item = OrderItem(
                     order_id=order.id,
                     product_id=item_data.product_id,
                     quantity=item_data.quantity,
-                    unit_price=item_data.unit_price,
-                    total_price=item_total
+                    unit_price=unit_price_rounded,
+                    total_price=item_total_rounded
                 )
                 db.add(order_item)
 
             # Apply discount to total amount
             # Use the discount_amount we already set above (either from update or 0.0)
+            discount_decimal = Decimal(str(order.discount_amount))
             if order.discount_amount and order.discount_amount > 0:
-                order.total_amount = total_amount - order.discount_amount
-            else:
-                order.total_amount = total_amount
+                total_amount = total_amount - discount_decimal
+            # Round to 2 decimal places
+            order.total_amount = float(total_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
 
         db.commit()
         db.refresh(order)
@@ -233,17 +261,18 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         date_from: Optional[Union[date, datetime]] = None,
         date_to: Optional[Union[date, datetime]] = None,
         search: Optional[str] = None,
-        client_timezone: Optional[str] = None
+        client_timezone: Optional[str] = None,
+        payment_status: Optional[OrderPaymentStatus] = None
     ) -> List[Order]:
-        """Get orders with optional filters for status, route, date range, and search
-        
+        """Get orders with optional filters for status, route, date range, search, and payment status
+
         Args:
             client_timezone: If provided, converts created_at to this timezone for date comparisons.
                             This allows filtering by date in the client's timezone regardless of
                             the database timezone.
         """
         from ..models.client import Client
-        from sqlalchemy import text, func
+        from sqlalchemy import text
 
         query = db.query(Order).options(
             joinedload(Order.client),
@@ -312,6 +341,16 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             # Join with Client table for name search
             query = query.join(Client, Order.client_id == Client.id)
 
+        if payment_status is not None:
+            from sqlalchemy import text
+            # Convert to lowercase to match database values
+            payment_status_value = payment_status.value if hasattr(
+                payment_status, 'value') else str(payment_status)
+            payment_status_value_lower = payment_status_value.lower()
+            filters.append(
+                text("orders.payment_status = :payment_status").params(
+                    payment_status=payment_status_value_lower))
+
         # Apply filters if any
         if filters:
             query = query.filter(and_(*filters))
@@ -328,9 +367,10 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
         search: Optional[str] = None,
-        client_timezone: Optional[str] = None
+        client_timezone: Optional[str] = None,
+        payment_status: Optional[OrderPaymentStatus] = None
     ) -> int:
-        """Count orders with optional filters for status, route, date range, and search"""
+        """Count orders with optional filters for status, route, date range, search, and payment status"""
         from ..models.client import Client
         from sqlalchemy import text
 
@@ -395,6 +435,16 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             filters.append(search_filters)
             # Join with Client table for name search
             query = query.join(Client, Order.client_id == Client.id)
+
+        if payment_status is not None:
+            from sqlalchemy import text
+            # Convert to lowercase to match database values
+            payment_status_value = payment_status.value if hasattr(
+                payment_status, 'value') else str(payment_status)
+            payment_status_value_lower = payment_status_value.lower()
+            filters.append(
+                text("orders.payment_status = :payment_status").params(
+                    payment_status=payment_status_value_lower))
 
         # Apply filters if any
         if filters:
