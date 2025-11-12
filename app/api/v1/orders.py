@@ -17,6 +17,7 @@ from ...services.orders_report_generator import OrdersReportGenerator
 from ...services.settings_service import SettingsService
 from ...services.payment_service import PaymentService
 from ...models.order import OrderStatus
+from ...models.payment import OrderPaymentStatus
 from ..dependencies import get_order_service, get_settings_service, get_payment_service
 from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
@@ -77,6 +78,9 @@ def get_orders(
         search: Optional[str] = Query(
             None,
             description="Search by order number or client name"),
+        payment_status_filter: Optional[str] = Query(
+            None,
+            description="Filter by payment status (unpaid, partial, paid)"),
         paginated: bool = Query(
             True,
             description="Return paginated response with metadata"),
@@ -92,6 +96,7 @@ def get_orders(
     - date_from: Show orders from this date onwards (inclusive)
     - date_to: Show orders up to this date (inclusive)
     - search: Search by order number or client name (case-insensitive partial matching)
+    - payment_status_filter: Filter by payment status (unpaid, partial, paid)
     - paginated: Return paginated response with metadata (default: True)
 
     Response:
@@ -128,10 +133,21 @@ def get_orders(
                 detail=f"Invalid status: {status_filter}. Valid values are: {', '.join([s.value for s in OrderStatus])}"
             )
 
+    # Convert payment_status filter to enum if provided
+    payment_status_enum = None
+    if payment_status_filter:
+        try:
+            payment_status_enum = OrderPaymentStatus(payment_status_filter)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid payment_status: {payment_status_filter}. Valid values are: {', '.join([s.value for s in OrderPaymentStatus])}"
+            )
+
     # Choose response format based on paginated parameter
     if paginated:
         # Use paginated response with full metadata
-        if any([status_enum, route_id, date_from_utc, date_to_utc, search]):
+        if any([status_enum, route_id, date_from_utc, date_to_utc, search, payment_status_enum]):
             return order_service.get_orders_paginated(
                 db,
                 skip=skip,
@@ -140,7 +156,8 @@ def get_orders(
                 route_id=route_id,
                 date_from=date_from_utc,
                 date_to=date_to_utc,
-                search=search
+                search=search,
+                payment_status=payment_status_enum
             )
         else:
             # No filters but paginated response
@@ -148,7 +165,7 @@ def get_orders(
                 db, skip=skip, limit=limit)
     else:
         # Backward compatibility: return simple list
-        if any([status_enum, route_id, date_from_utc, date_to_utc, search]):
+        if any([status_enum, route_id, date_from_utc, date_to_utc, search, payment_status_enum]):
             return order_service.get_orders_with_filters(
                 db,
                 skip=skip,
@@ -157,7 +174,8 @@ def get_orders(
                 route_id=route_id,
                 date_from=date_from_utc,
                 date_to=date_to_utc,
-                search=search
+                search=search,
+                payment_status=payment_status_enum
             )
         else:
             return order_service.get_orders(db, skip=skip, limit=limit)
