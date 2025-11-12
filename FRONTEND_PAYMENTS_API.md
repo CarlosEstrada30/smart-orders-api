@@ -61,7 +61,219 @@ Authorization: Bearer <token>
 
 ---
 
-### 2. Listar Pagos
+### 2. Crear Múltiples Pagos (Bulk)
+
+**Endpoint:** `POST /api/v1/payments/bulk`
+
+**Permisos:** Requiere rol de Vendedor o superior
+
+**Descripción:** Permite crear múltiples pagos en una sola solicitud. Útil cuando necesitas registrar pagos para varias órdenes al mismo tiempo. Si algunos pagos fallan, los pagos válidos se procesarán y se reportarán los que fallaron.
+
+**Request Body:**
+```json
+{
+  "payments": [
+    {
+      "order_id": 123,
+      "amount": 500.00,
+      "payment_method": "cash",
+      "notes": "Pago parcial en efectivo"
+    },
+    {
+      "order_id": 124,
+      "amount": 750.50,
+      "payment_method": "bank_transfer",
+      "notes": "Pago completo por transferencia"
+    },
+    {
+      "order_id": 125,
+      "amount": 300.00,
+      "payment_method": "credit_card",
+      "notes": "Pago con tarjeta de crédito"
+    }
+  ]
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "payments": [
+    {
+      "id": 1,
+      "payment_number": "PAY-A1B2C3D4",
+      "order_id": 123,
+      "amount": 500.00,
+      "payment_method": "cash",
+      "status": "confirmed",
+      "payment_date": "2025-01-15T10:30:00Z",
+      "notes": "Pago parcial en efectivo",
+      "created_by_user_id": 5,
+      "created_at": "2025-01-15T10:30:00Z",
+      "updated_at": "2025-01-15T10:30:00Z"
+    },
+    {
+      "id": 2,
+      "payment_number": "PAY-E5F6G7H8",
+      "order_id": 124,
+      "amount": 750.50,
+      "payment_method": "bank_transfer",
+      "status": "confirmed",
+      "payment_date": "2025-01-15T10:30:00Z",
+      "notes": "Pago completo por transferencia",
+      "created_by_user_id": 5,
+      "created_at": "2025-01-15T10:30:00Z",
+      "updated_at": "2025-01-15T10:30:00Z"
+    },
+    {
+      "id": 3,
+      "payment_number": "PAY-I9J0K1L2",
+      "order_id": 125,
+      "amount": 300.00,
+      "payment_method": "credit_card",
+      "status": "confirmed",
+      "payment_date": "2025-01-15T10:30:00Z",
+      "notes": "Pago con tarjeta de crédito",
+      "created_by_user_id": 5,
+      "created_at": "2025-01-15T10:30:00Z",
+      "updated_at": "2025-01-15T10:30:00Z"
+    }
+  ],
+  "total_payments": 3,
+  "total_amount": 1550.50,
+  "success_count": 3,
+  "failed_count": 0
+}
+```
+
+**Campos de Respuesta:**
+- `payments` - Lista de pagos creados exitosamente
+- `total_payments` - Total de pagos enviados en la solicitud
+- `total_amount` - Suma de todos los montos de los pagos creados exitosamente
+- `success_count` - Número de pagos creados exitosamente
+- `failed_count` - Número de pagos que fallaron (por validación o error)
+- `errors` - Lista detallada de pagos que fallaron con información sobre la razón del fallo
+
+**Comportamiento:**
+- Si algunos pagos fallan (por ejemplo, orden no encontrada, orden cancelada, monto inválido), los pagos válidos se procesarán normalmente
+- Los pagos que fallan no se crean, pero no impiden que los demás se procesen
+- Todas las órdenes afectadas se actualizan automáticamente con sus nuevos saldos
+- **Las órdenes canceladas no pueden recibir pagos** y se reportarán en el campo `errors` con la razón "No se pueden registrar pagos para órdenes canceladas"
+
+**Ejemplo con Pagos que Fallan:**
+```json
+{
+  "payments": [
+    {
+      "order_id": 123,
+      "amount": 500.00,
+      "payment_method": "cash",
+      "notes": "Pago válido"
+    },
+    {
+      "order_id": 999,
+      "amount": 200.00,
+      "payment_method": "cash",
+      "notes": "Orden que no existe"
+    },
+    {
+      "order_id": 125,
+      "amount": 300.00,
+      "payment_method": "credit_card",
+      "notes": "Pago válido"
+    },
+    {
+      "order_id": 126,
+      "amount": 150.00,
+      "payment_method": "bank_transfer",
+      "notes": "Orden cancelada"
+    }
+  ]
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "payments": [
+    {
+      "id": 1,
+      "payment_number": "PAY-A1B2C3D4",
+      "order_id": 123,
+      "amount": 500.00,
+      "payment_method": "cash",
+      "status": "confirmed",
+      "notes": "Pago válido",
+      ...
+    },
+    {
+      "id": 2,
+      "payment_number": "PAY-E5F6G7H8",
+      "order_id": 125,
+      "amount": 300.00,
+      "payment_method": "credit_card",
+      "status": "confirmed",
+      "notes": "Pago válido",
+      ...
+    }
+  ],
+  "total_payments": 4,
+  "total_amount": 800.00,
+  "success_count": 2,
+  "failed_count": 2,
+  "errors": [
+    {
+      "order_id": 999,
+      "order_number": null,
+      "client_name": null,
+      "amount": 200.00,
+      "payment_method": "cash",
+      "reason": "Orden no encontrada",
+      "notes": "Orden que no existe"
+    },
+    {
+      "order_id": 126,
+      "order_number": "ORD-ABC12345",
+      "client_name": "Juan Pérez",
+      "amount": 150.00,
+      "payment_method": "bank_transfer",
+      "reason": "No se pueden registrar pagos para órdenes canceladas",
+      "notes": "Orden cancelada"
+    }
+  ]
+}
+```
+
+**Campo `errors` - Información de Pagos Fallidos:**
+Cada error en el array `errors` contiene:
+- `order_id` - ID de la orden que no se pudo procesar
+- `order_number` - Número de la orden (si existe, `null` si la orden no existe)
+- `client_name` - Nombre del cliente (si la orden existe, `null` si la orden no existe)
+- `amount` - Monto del pago que falló
+- `payment_method` - Método de pago intentado
+- `reason` - Razón por la cual falló el pago (mensaje descriptivo)
+- `notes` - Notas del pago que falló (si se proporcionaron)
+
+**Razones Comunes de Error:**
+- `"Orden no encontrada"` - La orden con el ID especificado no existe
+- `"No se pueden registrar pagos para órdenes canceladas"` - La orden está en estado cancelado
+- `"El monto del pago debe ser mayor a 0"` - El monto proporcionado es inválido
+- `"Error inesperado: ..."` - Otros errores del sistema
+
+**Efecto Automático:**
+- Se actualizan automáticamente `paid_amount` y `balance_due` en todas las órdenes afectadas
+- Se actualiza `payment_status` de cada orden (unpaid → partial → paid)
+- Los pagos válidos se crean y confirman automáticamente
+
+**Casos de Uso:**
+- Registrar pagos de múltiples órdenes al final del día
+- Procesar pagos de un cliente que tiene varias órdenes pendientes
+- Importar pagos desde un sistema externo
+- Registrar pagos masivos después de una venta en efectivo
+
+---
+
+### 3. Listar Pagos
 
 **Endpoint:** `GET /api/v1/payments/`
 
@@ -101,7 +313,7 @@ Authorization: Bearer <token>
 
 ---
 
-### 3. Obtener un Pago Específico
+### 4. Obtener un Pago Específico
 
 **Endpoint:** `GET /api/v1/payments/{payment_id}`
 
@@ -126,7 +338,7 @@ Authorization: Bearer <token>
 
 ---
 
-### 4. Cancelar un Pago
+### 5. Cancelar un Pago
 
 **Endpoint:** `POST /api/v1/payments/{payment_id}/cancel`
 
@@ -156,7 +368,7 @@ Authorization: Bearer <token>
 
 ---
 
-### 5. Obtener Pagos de una Orden
+### 6. Obtener Pagos de una Orden
 
 **Endpoint:** `GET /api/v1/orders/{order_id}/payments`
 
@@ -195,7 +407,7 @@ Authorization: Bearer <token>
 
 ---
 
-### 6. Obtener Resumen de Pagos de una Orden
+### 7. Obtener Resumen de Pagos de una Orden
 
 **Endpoint:** `GET /api/v1/orders/{order_id}/payment-summary`
 
@@ -284,6 +496,17 @@ Cuando obtienes una orden (`GET /api/v1/orders/{order_id}`), ahora incluye campo
   - Recalcula `balance_due`
   - Actualiza `payment_status` de la orden
 
+### Flujo 5: Crear Múltiples Pagos (Bulk)
+- Usar el endpoint `/bulk` para registrar pagos de varias órdenes en una sola solicitud
+- Útil para:
+  - Registrar pagos al final del día de múltiples órdenes
+  - Procesar pagos de un cliente con varias órdenes pendientes
+  - Importar pagos desde un sistema externo
+- El sistema procesa todos los pagos válidos, incluso si algunos fallan
+- Revisar `success_count` y `failed_count` en la respuesta para verificar el resultado
+- Revisar el campo `errors` para obtener información detallada sobre los pagos que fallaron
+- **Las órdenes canceladas se ignoran automáticamente** y se reportan en el campo `errors` con la razón específica
+
 ---
 
 ## ⚠️ Validaciones y Errores
@@ -303,6 +526,28 @@ Cuando obtienes una orden (`GET /api/v1/orders/{order_id}`), ahora incluye campo
 }
 ```
 **Status:** 400 Bad Request
+
+**Nota:** En el endpoint `/bulk`, las órdenes canceladas no detienen el procesamiento. Se reportan en el campo `errors` de la respuesta:
+```json
+{
+  "errors": [
+    {
+      "order_id": 126,
+      "order_number": "ORD-ABC12345",
+      "client_name": "Juan Pérez",
+      "amount": 150.00,
+      "payment_method": "bank_transfer",
+      "reason": "No se pueden registrar pagos para órdenes canceladas",
+      "notes": "Orden cancelada"
+    }
+  ]
+}
+```
+
+**Nota sobre `order_number` y `client_name`:**
+- Si la orden existe, estos campos contendrán el número de orden y el nombre del cliente
+- Si la orden no existe (por ejemplo, ID inválido), estos campos serán `null`
+- Esto permite identificar fácilmente qué órdenes fallaron y a qué clientes pertenecen
 
 ### Error: Sin Permisos
 ```json
@@ -335,9 +580,12 @@ Cuando obtienes una orden (`GET /api/v1/orders/{order_id}`), ahora incluye campo
 
 ### Validaciones Importantes
 1. **No se pueden crear pagos para órdenes canceladas**
+   - En el endpoint individual (`POST /payments/`): Retorna error 400
+   - En el endpoint bulk (`POST /payments/bulk`): Se ignora el pago y se reporta en el campo `errors`
 2. **El monto del pago debe ser mayor a 0**
 3. **Solo se pueden cancelar pagos confirmados**
 4. **Al cancelar un pago, se recalcula automáticamente el saldo de la orden**
+5. **En el endpoint bulk, los errores no detienen el procesamiento de otros pagos válidos**
 
 ---
 
