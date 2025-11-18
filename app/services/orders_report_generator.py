@@ -4,6 +4,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from datetime import datetime
 from typing import List, Dict, Optional
 import requests
@@ -24,6 +25,52 @@ def format_quantity(quantity) -> str:
         return f"{quantity:,.2f}"
 
 
+def truncate_product_text(text: str, max_width_cm: float, font_size: int = 11, font_name: str = 'Helvetica') -> str:
+    """
+    Trunca un texto para que quepa en un ancho máximo dado.
+    
+    Args:
+        text: Texto a truncar
+        max_width_cm: Ancho máximo en centímetros
+        font_size: Tamaño de fuente en puntos
+        font_name: Nombre de la fuente
+    
+    Returns:
+        Texto truncado con "..." si es necesario
+    """
+    try:
+        # Convertir cm a puntos (1 cm = 28.35 puntos aproximadamente)
+        max_width_pts = max_width_cm * 28.35
+        
+        # Medir el ancho del texto completo
+        text_width = stringWidth(text, font_name, font_size)
+        
+        # Si el texto cabe, retornarlo completo
+        if text_width <= max_width_pts:
+            return text
+        
+        # Si no cabe, truncar progresivamente
+        # Empezar con una estimación basada en la proporción
+        estimated_chars = max(1, int(len(text) * (max_width_pts / text_width)))
+        
+        # Ajustar la estimación probando diferentes longitudes
+        # Buscar desde la estimación hacia abajo
+        for length in range(estimated_chars, 0, -1):
+            truncated = text[:length] + "..."
+            if stringWidth(truncated, font_name, font_size) <= max_width_pts:
+                return truncated
+        
+        # Si incluso con un solo carácter no cabe, retornar "..."
+        return "..."
+    except Exception:
+        # Fallback: usar truncamiento simple basado en caracteres si hay error
+        # Estimación aproximada: ~12-15 caracteres por 6.3 cm con fuente 11pt
+        max_chars = int(max_width_cm * 2.2)  # Aproximación conservadora
+        if len(text) > max_chars:
+            return text[:max_chars - 3] + "..."
+        return text
+
+
 class OrdersReportGenerator:
     """Generador de reportes PDF para múltiples órdenes agrupadas por cliente"""
 
@@ -40,7 +87,7 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='ReportTitle',
             parent=self.styles['Heading1'],
-            fontSize=16,  # Aumentado de 14 a 16
+            fontSize=18,  # Aumentado de 16 a 18 para mejor legibilidad
             spaceAfter=0.5,  # Mantenido
             textColor=colors.Color(0.2, 0.2, 0.2),
             alignment=TA_CENTER,
@@ -51,7 +98,7 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='CompanyInfo',
             parent=self.styles['Normal'],
-            fontSize=8,
+            fontSize=10,  # Aumentado de 8 a 10 para mejor legibilidad
             spaceAfter=0.2,  # Reducido de 0.5 a 0.2
             textColor=colors.Color(0.3, 0.3, 0.3),
             alignment=TA_CENTER,
@@ -62,7 +109,7 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='ClientTitle',
             parent=self.styles['Heading3'],
-            fontSize=12,  # Aumentado de 10 a 12
+            fontSize=14,  # Aumentado de 12 a 14 para mejor legibilidad
             spaceBefore=1,  # Reducido de 4 a 1
             spaceAfter=1,  # Reducido de 2 a 1
             textColor=colors.Color(0.1, 0.1, 0.1),
@@ -78,7 +125,7 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='ClientInfo',
             parent=self.styles['Normal'],
-            fontSize=9,
+            fontSize=11,  # Aumentado de 9 a 11 para mejor legibilidad
             spaceAfter=0.2,  # Reducido de 0.5 a 0.2
             textColor=colors.Color(0.4, 0.4, 0.4),
             alignment=TA_LEFT,
@@ -89,7 +136,7 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='OrderTitle',
             parent=self.styles['Normal'],
-            fontSize=10,  # Aumentado de 8 a 10
+            fontSize=12,  # Aumentado de 10 a 12 para mejor legibilidad
             spaceBefore=2,  # Reducido de 4 a 2
             spaceAfter=1,  # Reducido de 2 a 1
             textColor=colors.Color(0.2, 0.2, 0.2),
@@ -101,10 +148,23 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='CompactText',
             parent=self.styles['Normal'],
-            fontSize=8,  # Aumentado de 6 a 8
+            fontSize=10,  # Aumentado de 8 a 10 para mejor legibilidad
             spaceAfter=0.5,  # Reducido de 1 a 0.5
             spaceBefore=0.2,  # Reducido de 0.5 a 0.2
-            leading=8,  # Aumentado de 6 a 8
+            leading=12,  # Aumentado de 8 a 12 para mejor legibilidad
+            textColor=colors.Color(0.2, 0.2, 0.2),
+            alignment=TA_LEFT,
+            fontName='Helvetica'
+        ))
+
+        # Estilo para números de orden - tamaño original más pequeño
+        self.styles.add(ParagraphStyle(
+            name='OrderNumberText',
+            parent=self.styles['Normal'],
+            fontSize=9,  # Aumentado de 8 a 9
+            spaceAfter=0.5,
+            spaceBefore=0.2,
+            leading=9,
             textColor=colors.Color(0.2, 0.2, 0.2),
             alignment=TA_LEFT,
             fontName='Helvetica'
@@ -114,7 +174,7 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='TotalText',
             parent=self.styles['Normal'],
-            fontSize=9,  # Aumentado de 7 a 9
+            fontSize=11,  # Aumentado de 9 a 11 para mejor legibilidad
             spaceBefore=0.5,  # Reducido de 1 a 0.5
             spaceAfter=0.5,  # Reducido de 1 a 0.5
             textColor=colors.Color(0.1, 0.1, 0.1),
@@ -326,6 +386,10 @@ class OrdersReportGenerator:
                 else:
                     product_text = f"{format_quantity(quantity)}x {product_name}"
 
+                # Truncar el texto del producto para que quepa en la columna (6.65 cm menos padding)
+                # Usamos 6.3 cm como ancho máximo para dejar margen de seguridad
+                product_text = truncate_product_text(product_text, max_width_cm=6.3, font_size=11)
+
                 # Distribuir productos en dos columnas
                 if i % 2 == 0:
                     products_left.append(product_text)
@@ -345,8 +409,9 @@ class OrdersReportGenerator:
                     right_product = products_right[i] if i < len(products_right) else ""
                     internal_table_data.append([left_product, right_product])
 
-                # Crear tabla interna con ReportLab - columnas más anchas para aprovechar el espacio
-                internal_table = Table(internal_table_data, colWidths=[5.8 * cm, 5.8 * cm])
+                # Crear tabla interna con ReportLab - columnas más anchas para evitar superposición de nombres largos
+                # Ajustado para usar mejor el espacio disponible en la columna de productos (13.3 cm total)
+                internal_table = Table(internal_table_data, colWidths=[6.65 * cm, 6.65 * cm])
 
                 # Estilos para la tabla interna (solo línea divisoria central) - espaciado mínimo
                 internal_table.setStyle(TableStyle([
@@ -366,8 +431,8 @@ class OrdersReportGenerator:
 
                     # Fuente con leading reducido
                     ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 9),  # Aumentado de 7 a 9
-                    ('LEADING', (0, 0), (-1, -1), 10),  # Aumentado de 8 a 10
+                    ('FONTSIZE', (0, 0), (-1, -1), 11),  # Aumentado de 9 a 11 para mejor legibilidad
+                    ('LEADING', (0, 0), (-1, -1), 12),  # Aumentado de 10 a 12 para mejor legibilidad
                 ]))
 
                 # Crear el contenido de la celda con la tabla interna
@@ -392,10 +457,10 @@ class OrdersReportGenerator:
                 created_at_client = order.created_at
 
             # Crear número de orden con fecha debajo
-            order_number_with_date = f"{order.order_number}<br/><font size='8'>{created_at_client.strftime('%d/%m/%Y')}</font>"
+            order_number_with_date = f"{order.order_number}<br/><font size='9'>{created_at_client.strftime('%d/%m/%Y')}</font>"
 
             row = [
-                Paragraph(order_number_with_date, self.styles['CompactText']),
+                Paragraph(order_number_with_date, self.styles['OrderNumberText']),
                 status_text,
                 products_content,
                 f"Q {order.total_amount:,.2f}"
@@ -403,7 +468,8 @@ class OrdersReportGenerator:
             table_data.append(row)
 
         # Crear tabla de órdenes (expandir columna de productos con 2 columnas internas) - optimizada para más espacio
-        col_widths = [2.8 * cm, 2.0 * cm, 12.0 * cm, 2.0 * cm]
+        # Ajustado para dar más espacio a productos y evitar superposición de nombres largos
+        col_widths = [2.7 * cm, 1.8 * cm, 13.3 * cm, 2.0 * cm]
         orders_table = Table(table_data, colWidths=col_widths)
 
         table_style = [
@@ -411,14 +477,17 @@ class OrdersReportGenerator:
             ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.3, 0.3, 0.3)),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),  # Aumentado de 7 a 9
+            ('FONTSIZE', (0, 0), (-1, 0), 11),  # Aumentado de 9 a 11 para mejor legibilidad
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
             ('TOPPADDING', (0, 0), (-1, 0), 4),
 
-            # Data rows
+            # Data rows - tamaño de fuente general
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),  # Aumentado de 7 a 9
+            ('FONTSIZE', (0, 1), (-1, -1), 11),  # Aumentado de 9 a 11 para mejor legibilidad
+            # Números de orden y estado con tamaño aumentado un punto
+            ('FONTSIZE', (0, 1), (0, -1), 9),  # No. Orden - aumentado de 8 a 9
+            ('FONTSIZE', (1, 1), (1, -1), 10),  # Estado - aumentado de 9 a 10
             ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # No. Orden centrado
             ('ALIGN', (1, 1), (1, -1), 'CENTER'),  # Estado centrado
             ('ALIGN', (3, 1), (3, -1), 'RIGHT'),   # Total a la derecha
@@ -548,14 +617,14 @@ class OrdersReportGenerator:
                 ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.3, 0.3, 0.3)),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 9),  # Aumentado de 7 a 9
+                ('FONTSIZE', (0, 0), (-1, 0), 11),  # Aumentado de 9 a 11 para mejor legibilidad
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 3),
                 ('TOPPADDING', (0, 0), (-1, 0), 3),
 
                 # Data rows
                 ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 9),  # Aumentado de 7 a 9
+                ('FONTSIZE', (0, 1), (-1, -1), 11),  # Aumentado de 9 a 11 para mejor legibilidad
                 ('ALIGN', (1, 1), (1, -1), 'CENTER'),  # Total del Producto centrado
                 ('ALIGN', (2, 1), (2, -1), 'RIGHT'),   # Valor a la derecha
                 ('VALIGN', (0, 1), (-1, -1), 'TOP'),
@@ -665,17 +734,17 @@ class OrdersReportGenerator:
             ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.3, 0.3, 0.3)),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),  # Aumentado de 8 a 10
+            ('FONTSIZE', (0, 0), (-1, 0), 12),  # Aumentado de 10 a 12 para mejor legibilidad
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
 
             # Data rows
             ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -2), 10),  # Aumentado de 8 a 10
+            ('FONTSIZE', (0, 1), (-1, -2), 12),  # Aumentado de 10 a 12 para mejor legibilidad
             ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
 
             # Total row
             ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, -1), (-1, -1), 11),  # Aumentado de 9 a 11
+            ('FONTSIZE', (0, -1), (-1, -1), 13),  # Aumentado de 11 a 13 para mejor legibilidad
             ('BACKGROUND', (0, -1), (-1, -1), colors.Color(0.9, 0.9, 0.9)),
             ('LINEABOVE', (0, -1), (-1, -1), 2, colors.Color(0.3, 0.3, 0.3)),
 
