@@ -96,29 +96,28 @@ class ReceiptGenerator:
         c.setFillColor(colors.darkblue)
         c.drawString(self.margin, y, company_info.name)
 
-        # COMPROBANTE title (right aligned)
+        # ORDEN DE PEDIDO title (right aligned)
         c.setFont("Helvetica-Bold", 20)
         c.setFillColor(colors.darkgreen)
         title_width = c.stringWidth(
-            "COMPROBANTE DE PEDIDO", "Helvetica-Bold", 20)
+            "ORDEN DE PEDIDO", "Helvetica-Bold", 20)
         c.drawString(
             self.width -
             self.margin -
             title_width,
             y,
-            "COMPROBANTE DE PEDIDO")
+            "ORDEN DE PEDIDO")
 
-        # Company info (left side)
+        # Company info (left side) - sin email
         y -= 25
         c.setFont("Helvetica", 9)
         c.setFillColor(colors.black)
 
-        company_lines = [
-            f"📍 {company_info.address}",
-            f"📞 {company_info.phone}",
-            f"📧 {company_info.email}",
-            f"🆔 NIT: {company_info.nit}"
-        ]
+        company_lines = []
+        if company_info.address:
+            company_lines.append(f"📍 {company_info.address}")
+        if company_info.phone:
+            company_lines.append(f"📞 {company_info.phone}")
 
         for line in company_lines:
             c.drawString(self.margin, y, line)
@@ -386,7 +385,7 @@ class ReceiptGenerator:
         c.setFillColor(colors.black)
 
         notes = [
-            "• Este es un comprobante de pedido, NO es una factura fiscal",
+            "• Este es una orden de pedido, NO es una factura fiscal",
             "• Conserve este documento para referencia y seguimiento",
             "• Para facturación fiscal, solicite su factura por separado"
         ]
@@ -413,7 +412,7 @@ class ReceiptGenerator:
 
         # Generation timestamp
         y -= 12
-        timestamp = f"Comprobante generado el {datetime.now().strftime('%d/%m/%Y a las %H:%M')}"
+        timestamp = f"Orden de pedido generada el {datetime.now().strftime('%d/%m/%Y a las %H:%M')}"
         timestamp_width = c.stringWidth(timestamp, "Helvetica-Oblique", 8)
         center_x = (self.width - timestamp_width) / 2
         c.setFont("Helvetica-Oblique", 8)

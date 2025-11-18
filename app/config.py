@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from typing import Optional
 
 
@@ -76,8 +77,10 @@ class Settings(BaseSettings):
         """
         return self.ENVIRONMENT.lower() == "production"
 
-    class Config:
-        env_file = ".env"
+    model_config = ConfigDict(
+        env_file=".env",
+        extra="ignore"  # Ignorar campos extra en lugar de rechazarlos
+    )
 
 
 settings = Settings()

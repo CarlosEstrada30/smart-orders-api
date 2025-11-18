@@ -131,7 +131,7 @@ class ProfessionalReceiptGenerator:
         # Título del documento
         story.append(
             Paragraph(
-                "COMPROBANTE DE PEDIDO",
+                "ORDEN DE PEDIDO",
                 self.styles['CompanyTitle']))
         story.append(Spacer(1, 10 * mm))
 
@@ -183,7 +183,7 @@ class ProfessionalReceiptGenerator:
         # Título del documento
         story.append(
             Paragraph(
-                "COMPROBANTE DE PEDIDO",
+                "ORDEN DE PEDIDO",
                 self.styles['CompanyTitle']))
         story.append(Spacer(1, 10 * mm))
 
@@ -228,9 +228,7 @@ class ProfessionalReceiptGenerator:
         # Información de la empresa
         company_info = f"""
         <para align="center">
-        <font size="20" color="#1a4b8c"><b>{settings.company_name}</b></font><br/>
-        <font size="12" color="#666666">{settings.business_name}</font><br/>
-        <font size="10" color="#666666">NIT: {settings.nit}</font>
+        <font size="20" color="#1a4b8c"><b>{settings.company_name}</b></font>
         </para>
         """
 
@@ -252,14 +250,12 @@ class ProfessionalReceiptGenerator:
 
         elements.append(header_table)
 
-        # Información de contacto debajo
+        # Información de contacto debajo (sin email)
         contact_info = []
         if settings.address:
             contact_info.append(f"📍 {settings.address}")
         if settings.phone:
             contact_info.append(f"📞 {settings.phone}")
-        if settings.email:
-            contact_info.append(f"📧 {settings.email}")
         if settings.website:
             contact_info.append(f"🌐 {settings.website}")
 
@@ -568,7 +564,7 @@ class ProfessionalReceiptGenerator:
                 self.styles['SectionTitle']))
 
         important_notes = [
-            "• Este es un comprobante de pedido, NO constituye una factura fiscal.",
+            "• Este es una orden de pedido, NO constituye una factura fiscal.",
             "• Conserve este documento para seguimiento y referencia de su pedido.",
             "• Para facturación fiscal, solicite su factura correspondiente por separado.",
             "• Si tiene preguntas sobre su pedido, conserve el número de referencia."]
@@ -590,9 +586,9 @@ class ProfessionalReceiptGenerator:
             # Convert current time to client timezone
             current_time = datetime.now()
             client_time = convert_utc_to_client_timezone(current_time, client_timezone)
-            timestamp = f"Comprobante generado el {client_time.strftime('%d de %B de %Y a las %I:%M %p')}"
+            timestamp = f"Orden de pedido generada el {client_time.strftime('%d de %B de %Y a las %I:%M %p')}"
         else:
-            timestamp = f"Comprobante generado el {datetime.now().strftime('%d de %B de %Y a las %I:%M %p')}"
+            timestamp = f"Orden de pedido generada el {datetime.now().strftime('%d de %B de %Y a las %I:%M %p')}"
 
         elements.append(
             Paragraph(

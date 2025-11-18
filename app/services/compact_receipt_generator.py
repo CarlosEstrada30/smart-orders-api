@@ -120,7 +120,7 @@ class CompactReceiptGenerator:
         # Título del documento
         story.append(
             Paragraph(
-                "COMPROBANTE DE PEDIDO",
+                "ORDEN DE PEDIDO",
                 self.styles['CompanyTitle']))
         story.append(Spacer(1, 4 * mm))
 
@@ -168,7 +168,7 @@ class CompactReceiptGenerator:
         # Título del documento
         story.append(
             Paragraph(
-                "COMPROBANTE DE PEDIDO",
+                "ORDEN DE PEDIDO",
                 self.styles['CompanyTitle']))
         story.append(Spacer(1, 4 * mm))
 
@@ -196,12 +196,7 @@ class CompactReceiptGenerator:
         elements = []
 
         # Información de la empresa en formato compacto
-        company_parts = [f"<b>{settings.company_name}</b>"]
-        if settings.business_name:
-            company_parts.append(settings.business_name)
-        company_parts.append(f"NIT: {settings.nit}")
-
-        company_info = f'<para align="center">{" | ".join(company_parts)}</para>'
+        company_info = f'<para align="center"><b>{settings.company_name}</b></para>'
 
         # Si hay logo, crear tabla con logo e info
         if settings.logo_url:
@@ -232,14 +227,12 @@ class CompactReceiptGenerator:
         else:
             elements.append(Paragraph(company_info, self.styles['Normal']))
 
-        # Información de contacto en una línea
+        # Información de contacto centrada (sin email)
         contact_parts = []
         if settings.address:
             contact_parts.append(settings.address)
         if settings.phone:
             contact_parts.append(f"Tel: {settings.phone}")
-        if settings.email:
-            contact_parts.append(settings.email)
 
         if contact_parts:
             contact_text = " | ".join(contact_parts)
@@ -469,7 +462,7 @@ class CompactReceiptGenerator:
 
         # Solo las notas más importantes
         notes = [
-            "• Este es un comprobante de pedido, NO constituye factura fiscal.",
+            "• Este es una orden de pedido, NO constituye factura fiscal.",
             "• Conserve este documento para seguimiento de su pedido.",
         ]
 
