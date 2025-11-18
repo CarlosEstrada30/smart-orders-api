@@ -17,6 +17,7 @@ from ..services.settings_service import SettingsService
 from ..services.tenant_service import TenantService
 from ..services.auth_service import AuthService
 from ..services.ai_service import AIService
+from ..services.whatsapp_service import WhatsAppService
 
 
 def get_client_timezone(request: Request) -> str:
@@ -103,3 +104,8 @@ def get_auth_service() -> AuthService:
 def get_ai_service() -> AIService:
     """Get AIService instance"""
     return AIService()
+
+
+def get_whatsapp_service() -> WhatsAppService:
+    """Get WhatsAppService instance"""
+    return WhatsAppService()

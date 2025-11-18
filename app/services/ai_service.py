@@ -296,3 +296,56 @@ Interpreta estos resultados y proporciona una respuesta clara al usuario en espa
             logger.error(f"Error procesando consulta: {e}")
             raise
 
+    def process_whatsapp_message(
+        self,
+        user_message: str,
+        context: Optional[str] = None
+    ) -> str:
+        """
+        Procesa un mensaje de WhatsApp con ChatGPT y devuelve una respuesta conversacional.
+
+        Args:
+            user_message: Mensaje del usuario desde WhatsApp
+            context: Contexto adicional opcional (ej: información del sistema)
+
+        Returns:
+            str: Respuesta generada por ChatGPT
+        """
+        system_prompt = """Eres un asistente virtual amigable y profesional para un sistema de gestión de pedidos.
+Tu tarea es ayudar a los usuarios con consultas sobre pedidos, productos, clientes y otras operaciones del negocio.
+
+IMPORTANTE:
+- Responde en español de manera clara y concisa
+- Sé amigable y profesional
+- Si el usuario pregunta sobre información específica de la base de datos, puedes mencionar que necesitas acceso a la base de datos para consultar esa información
+- Para consultas generales, proporciona respuestas útiles
+- Si no entiendes algo, pide aclaración de manera amigable
+- Mantén las respuestas breves y directas (idealmente menos de 200 palabras)"""
+
+        user_prompt = user_message
+        
+        if context:
+            user_prompt = f"Contexto: {context}\n\nMensaje del usuario: {user_message}"
+
+        try:
+            logger.info(f"Procesando mensaje de WhatsApp con ChatGPT: {user_message[:50]}...")
+            
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=500
+            )
+            
+            answer = response.choices[0].message.content.strip()
+            logger.info("Respuesta generada exitosamente por ChatGPT")
+            
+            return answer
+            
+        except Exception as e:
+            logger.error(f"Error procesando mensaje de WhatsApp: {e}")
+            raise ValueError(f"Error al procesar el mensaje: {str(e)}")
+

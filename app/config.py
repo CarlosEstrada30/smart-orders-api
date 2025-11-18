@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o-mini"  # Default model for AI queries
 
+    # EvolutionAPI WhatsApp configuration
+    EVOLUTION_API_URL: Optional[str] = None
+    EVOLUTION_API_KEY: Optional[str] = None
+    EVOLUTION_INSTANCE_NAME: Optional[str] = None
+
     def get_database_url(self) -> str:
         """
         Retorna la URL de la base de datos con parámetros SSL si es necesario
