@@ -198,21 +198,25 @@ class CompactReceiptGenerator:
         # Información de la empresa en formato compacto
         company_info = f'<para align="center"><b>{settings.company_name}</b></para>'
 
-        # Si hay logo, crear tabla con logo e info
+        # Si hay logo, crear tabla con logo a la izquierda y nombre centrado
         if settings.logo_url:
             try:
                 logo = self._get_logo_image(
                     settings.logo_url, max_width=2.5 * cm, max_height=2.5 * cm)
                 if logo:
+                    # Tabla de 3 columnas: logo | nombre centrado | espacio vacío
+                    # Esto permite que el nombre esté realmente centrado en toda la página
                     header_data = [
-                        [logo, Paragraph(company_info, self.styles['Normal'])]]
+                        [logo, Paragraph(company_info, self.styles['Normal']), ""]]
+                    # Anchos: logo pequeño, nombre en el centro, espacio vacío del mismo tamaño que el logo
                     header_table = Table(
                         header_data, colWidths=[
-                            3 * cm, 13 * cm])
+                            3 * cm, 10 * cm, 3 * cm])
                     header_table.setStyle(TableStyle([
                         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                        ('ALIGN', (0, 0), (0, 0), 'CENTER'),
-                        ('ALIGN', (1, 0), (1, 0), 'LEFT'),
+                        ('ALIGN', (0, 0), (0, 0), 'CENTER'),  # Logo centrado en su celda
+                        ('ALIGN', (1, 0), (1, 0), 'CENTER'),  # Nombre centrado
+                        ('ALIGN', (2, 0), (2, 0), 'CENTER'),  # Espacio vacío
                         ('LEFTPADDING', (0, 0), (-1, -1), 0),
                         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
                     ]))

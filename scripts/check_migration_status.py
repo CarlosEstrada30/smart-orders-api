@@ -9,18 +9,22 @@ Este script muestra información sobre:
 - No ejecuta migraciones, solo reporta el estado
 """
 
-import logging
-from sqlalchemy import text
-from app.utils.tenant_db import get_engine_for_schema, list_schemas
-from app.services.tenant_service import TenantService
-from app.database import SessionLocal, engine
 import sys
 import os
 from typing import List, Dict, Optional
-from dotenv import load_dotenv
 
-# Agregar el directorio raíz al path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Agregar el directorio raíz al path ANTES de importar módulos de app
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+import logging
+from sqlalchemy import text
+from dotenv import load_dotenv
+from app.utils.tenant_db import get_engine_for_schema, list_schemas
+from app.services.tenant_service import TenantService
+from app.database import SessionLocal, engine
 
 # Cargar variables de entorno
 load_dotenv()
