@@ -18,7 +18,7 @@ from ...models.order import OrderStatus
 from ..dependencies import get_order_service, get_settings_service
 from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
-from ...utils.date_filters import create_date_range_utc, validate_date_range
+from ...utils.date_filters import validate_date_range
 from ...middleware import get_request_timezone
 from ...utils.permissions import (
     can_create_orders, can_view_orders,
@@ -105,14 +105,11 @@ def get_orders(
     # Validate date range
     validate_date_range(date_from, date_to)
 
-    # Get client timezone and convert date filters to UTC
+    # Get client timezone - will be used in SQL query to convert created_at
     client_timezone = get_request_timezone(request) if request else None
-    if client_timezone:
-        date_from_utc, date_to_utc = create_date_range_utc(date_from, date_to, client_timezone)
-    else:
-        # Fallback to original dates if no timezone available
-        date_from_utc = date_from
-        date_to_utc = date_to
+    # Pass dates directly - the repository will convert created_at in SQL
+    date_from_utc = date_from
+    date_to_utc = date_to
 
     # Convert status filter to enum if provided
     status_enum = None
@@ -137,7 +134,8 @@ def get_orders(
                 route_id=route_id,
                 date_from=date_from_utc,
                 date_to=date_to_utc,
-                search=search
+                search=search,
+                client_timezone=client_timezone
             )
         else:
             # No filters but paginated response
@@ -154,7 +152,8 @@ def get_orders(
                 route_id=route_id,
                 date_from=date_from_utc,
                 date_to=date_to_utc,
-                search=search
+                search=search,
+                client_timezone=client_timezone
             )
         else:
             return order_service.get_orders(db, skip=skip, limit=limit)
@@ -604,11 +603,13 @@ def _parse_status_filter(
 
 
 def _get_filtered_orders(order_service, db, status_enum,
-                         route_id, date_from, date_to, search, exclude_cancelled=False):
+                         route_id, date_from, date_to, search, 
+                         exclude_cancelled=False, client_timezone=None):
     """Get orders with applied filters
     
     Args:
         exclude_cancelled: If True and status_enum is None, exclude cancelled orders
+        client_timezone: Client timezone for date filtering in SQL
     """
     # If no status filter is specified and we should exclude cancelled orders,
     # filter them out after getting the orders
@@ -622,7 +623,8 @@ def _get_filtered_orders(order_service, db, status_enum,
             route_id=route_id,
             date_from=date_from,
             date_to=date_to,
-            search=search
+            search=search,
+            client_timezone=client_timezone
         )
         # Filter out cancelled orders
         # Compare by value to handle both enum and string representations
@@ -637,7 +639,8 @@ def _get_filtered_orders(order_service, db, status_enum,
             route_id=route_id,
             date_from=date_from,
             date_to=date_to,
-            search=search
+            search=search,
+            client_timezone=client_timezone
         )
 
     if not orders:
@@ -771,14 +774,11 @@ def download_orders_report_pdf(
 
         status_enum = _parse_status_filter(status_filter)
 
-        # Get client timezone and convert date filters to UTC
+        # Get client timezone - will be used in SQL query to convert created_at
         client_timezone = get_request_timezone(request) if request else None
-        if client_timezone:
-            date_from_utc, date_to_utc = create_date_range_utc(date_from, date_to, client_timezone)
-        else:
-            # Fallback to original dates if no timezone available
-            date_from_utc = date_from
-            date_to_utc = date_to
+        # Pass dates directly - the repository will convert created_at in SQL
+        date_from_utc = date_from
+        date_to_utc = date_to
 
         # Exclude cancelled orders unless explicitly filtering for cancelled status
         exclude_cancelled = status_enum != OrderStatus.CANCELLED
@@ -791,7 +791,8 @@ def download_orders_report_pdf(
             date_from_utc,
             date_to_utc,
             search,
-            exclude_cancelled=exclude_cancelled)
+            exclude_cancelled=exclude_cancelled,
+            client_timezone=client_timezone)
         settings = _get_company_settings(settings_service, db)
         raw_orders = _get_raw_orders(db, orders, exclude_cancelled=exclude_cancelled)
 

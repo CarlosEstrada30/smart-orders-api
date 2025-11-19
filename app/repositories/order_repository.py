@@ -231,10 +231,18 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         route_id: Optional[int] = None,
         date_from: Optional[Union[date, datetime]] = None,
         date_to: Optional[Union[date, datetime]] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        client_timezone: Optional[str] = None
     ) -> List[Order]:
-        """Get orders with optional filters for status, route, date range, and search"""
+        """Get orders with optional filters for status, route, date range, and search
+        
+        Args:
+            client_timezone: If provided, converts created_at to this timezone for date comparisons.
+                            This allows filtering by date in the client's timezone regardless of
+                            the database timezone.
+        """
         from ..models.client import Client
+        from sqlalchemy import text, func
 
         query = db.query(Order).options(
             joinedload(Order.client),
@@ -246,7 +254,6 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         filters = []
 
         if status is not None:
-            from sqlalchemy import text
             # Convert to uppercase to match database values
             status_value = status.value if hasattr(
                 status, 'value') else str(status)
@@ -259,9 +266,16 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             filters.append(Order.route_id == route_id)
 
         if date_from is not None:
-            # Handle both date and datetime objects
-            if isinstance(date_from, date):
-                # Include orders from the beginning of date_from
+            if client_timezone and isinstance(date_from, date):
+                # Convert created_at to client timezone and compare with date
+                # PostgreSQL: created_at is timestamp with timezone, convert to client timezone
+                filters.append(
+                    text(
+                        "DATE(orders.created_at AT TIME ZONE :tz) >= :date_from"
+                    ).params(tz=client_timezone, date_from=date_from)
+                )
+            elif isinstance(date_from, date):
+                # Include orders from the beginning of date_from (no timezone conversion)
                 filters.append(
                     Order.created_at >= datetime.combine(
                         date_from, datetime.min.time()))
@@ -270,9 +284,15 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
                 filters.append(Order.created_at >= date_from)
 
         if date_to is not None:
-            # Handle both date and datetime objects
-            if isinstance(date_to, date):
-                # Include orders until the end of date_to
+            if client_timezone and isinstance(date_to, date):
+                # Convert created_at to client timezone and compare with date
+                filters.append(
+                    text(
+                        "DATE(orders.created_at AT TIME ZONE :tz) <= :date_to"
+                    ).params(tz=client_timezone, date_to=date_to)
+                )
+            elif isinstance(date_to, date):
+                # Include orders until the end of date_to (no timezone conversion)
                 filters.append(
                     Order.created_at <= datetime.combine(
                         date_to, datetime.max.time()))
@@ -306,10 +326,12 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         route_id: Optional[int] = None,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        client_timezone: Optional[str] = None
     ) -> int:
         """Count orders with optional filters for status, route, date range, and search"""
         from ..models.client import Client
+        from sqlalchemy import text
 
         query = db.query(Order)
 
@@ -317,7 +339,6 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         filters = []
 
         if status is not None:
-            from sqlalchemy import text
             # Convert to uppercase to match database values
             status_value = status.value if hasattr(
                 status, 'value') else str(status)
@@ -330,9 +351,15 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             filters.append(Order.route_id == route_id)
 
         if date_from is not None:
-            # Handle both date and datetime objects
-            if isinstance(date_from, date):
-                # Include orders from the beginning of date_from
+            if client_timezone and isinstance(date_from, date):
+                # Convert created_at to client timezone and compare with date
+                filters.append(
+                    text(
+                        "DATE(orders.created_at AT TIME ZONE :tz) >= :date_from"
+                    ).params(tz=client_timezone, date_from=date_from)
+                )
+            elif isinstance(date_from, date):
+                # Include orders from the beginning of date_from (no timezone conversion)
                 filters.append(
                     Order.created_at >= datetime.combine(
                         date_from, datetime.min.time()))
@@ -341,9 +368,15 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
                 filters.append(Order.created_at >= date_from)
 
         if date_to is not None:
-            # Handle both date and datetime objects
-            if isinstance(date_to, date):
-                # Include orders until the end of date_to
+            if client_timezone and isinstance(date_to, date):
+                # Convert created_at to client timezone and compare with date
+                filters.append(
+                    text(
+                        "DATE(orders.created_at AT TIME ZONE :tz) <= :date_to"
+                    ).params(tz=client_timezone, date_to=date_to)
+                )
+            elif isinstance(date_to, date):
+                # Include orders until the end of date_to (no timezone conversion)
                 filters.append(
                     Order.created_at <= datetime.combine(
                         date_to, datetime.max.time()))

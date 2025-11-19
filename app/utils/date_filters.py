@@ -1,7 +1,7 @@
 """
 Utilities for handling date filters with timezone conversion.
 """
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional, Tuple
 from ..utils.timezone import convert_client_timezone_to_utc
 

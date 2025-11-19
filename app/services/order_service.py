@@ -110,7 +110,8 @@ class OrderService:
         route_id: Optional[int] = None,
         date_from: Optional[Union[date, datetime]] = None,
         date_to: Optional[Union[date, datetime]] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        client_timezone: Optional[str] = None
     ) -> List[OrderResponse]:
         """Get orders with optional filters for status, route, date range, and search"""
         orders = self.order_repository.get_orders_with_filters(
@@ -121,7 +122,8 @@ class OrderService:
             route_id=route_id,
             date_from=date_from,
             date_to=date_to,
-            search=search
+            search=search,
+            client_timezone=client_timezone
         )
         return [self._process_order_response(order) for order in orders]
 
@@ -134,7 +136,8 @@ class OrderService:
         route_id: Optional[int] = None,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        client_timezone: Optional[str] = None
     ) -> PaginatedResponse[OrderResponse]:
         """Get orders with pagination metadata"""
         # Check if any filters are applied
@@ -150,7 +153,8 @@ class OrderService:
                 route_id=route_id,
                 date_from=date_from,
                 date_to=date_to,
-                search=search
+                search=search,
+                client_timezone=client_timezone
             )
 
             # Get total count with same filters
@@ -160,7 +164,8 @@ class OrderService:
                 route_id=route_id,
                 date_from=date_from,
                 date_to=date_to,
-                search=search
+                search=search,
+                client_timezone=client_timezone
             )
         else:
             # Use unfiltered method
