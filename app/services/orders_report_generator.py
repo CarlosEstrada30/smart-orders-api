@@ -36,7 +36,7 @@ def truncate_product_text(text: str, max_width_cm: float, font_size: int = 11, f
         font_name: Nombre de la fuente
     
     Returns:
-        Texto truncado con "..." si es necesario
+        Texto truncado sin puntos suspensivos para maximizar caracteres visibles
     """
     try:
         # Convertir cm a puntos (1 cm = 28.35 puntos aproximadamente)
@@ -49,25 +49,25 @@ def truncate_product_text(text: str, max_width_cm: float, font_size: int = 11, f
         if text_width <= max_width_pts:
             return text
         
-        # Si no cabe, truncar progresivamente
+        # Si no cabe, truncar progresivamente sin agregar "..."
         # Empezar con una estimación basada en la proporción
         estimated_chars = max(1, int(len(text) * (max_width_pts / text_width)))
         
         # Ajustar la estimación probando diferentes longitudes
         # Buscar desde la estimación hacia abajo
         for length in range(estimated_chars, 0, -1):
-            truncated = text[:length] + "..."
+            truncated = text[:length]
             if stringWidth(truncated, font_name, font_size) <= max_width_pts:
                 return truncated
         
-        # Si incluso con un solo carácter no cabe, retornar "..."
-        return "..."
+        # Si incluso con un solo carácter no cabe, retornar el primer carácter
+        return text[0] if len(text) > 0 else ""
     except Exception:
         # Fallback: usar truncamiento simple basado en caracteres si hay error
-        # Estimación aproximada: ~12-15 caracteres por 6.3 cm con fuente 11pt
-        max_chars = int(max_width_cm * 2.2)  # Aproximación conservadora
+        # Estimación aproximada: ~10-12 caracteres por 6.3 cm con fuente 12pt
+        max_chars = int(max_width_cm * 2.0)  # Aproximación conservadora ajustada para fuente 12pt
         if len(text) > max_chars:
-            return text[:max_chars - 3] + "..."
+            return text[:max_chars]
         return text
 
 
@@ -148,10 +148,10 @@ class OrdersReportGenerator:
         self.styles.add(ParagraphStyle(
             name='CompactText',
             parent=self.styles['Normal'],
-            fontSize=10,  # Aumentado de 8 a 10 para mejor legibilidad
+            fontSize=12,  # Aumentado de 11 a 12 para mejor legibilidad
             spaceAfter=0.5,  # Reducido de 1 a 0.5
             spaceBefore=0.2,  # Reducido de 0.5 a 0.2
-            leading=12,  # Aumentado de 8 a 12 para mejor legibilidad
+            leading=14,  # Aumentado de 13 a 14 para mejor legibilidad
             textColor=colors.Color(0.2, 0.2, 0.2),
             alignment=TA_LEFT,
             fontName='Helvetica'
@@ -368,7 +368,7 @@ class OrdersReportGenerator:
             elements.append(Paragraph(client_info, self.styles['ClientInfo']))
 
         # Crear tabla compacta para todas las órdenes del cliente
-        headers = ['No. Orden', 'Estado', 'Productos', 'Total']
+        headers = ['No. Orden', 'Productos', 'Total']
         table_data = [headers]
 
         for order in orders:
@@ -386,9 +386,9 @@ class OrdersReportGenerator:
                 else:
                     product_text = f"{format_quantity(quantity)}x {product_name}"
 
-                # Truncar el texto del producto para que quepa en la columna (6.65 cm menos padding)
-                # Usamos 6.3 cm como ancho máximo para dejar margen de seguridad
-                product_text = truncate_product_text(product_text, max_width_cm=6.3, font_size=11)
+                # Truncar el texto del producto para que quepa en la columna (7.8 cm menos padding)
+                # Usamos 7.5 cm como ancho máximo para dejar margen de seguridad
+                product_text = truncate_product_text(product_text, max_width_cm=7.5, font_size=13)
 
                 # Distribuir productos en dos columnas
                 if i % 2 == 0:
@@ -410,8 +410,8 @@ class OrdersReportGenerator:
                     internal_table_data.append([left_product, right_product])
 
                 # Crear tabla interna con ReportLab - columnas más anchas para evitar superposición de nombres largos
-                # Ajustado para usar mejor el espacio disponible en la columna de productos (13.3 cm total)
-                internal_table = Table(internal_table_data, colWidths=[6.65 * cm, 6.65 * cm])
+                # Ajustado para usar mejor el espacio disponible en la columna de productos (15.6 cm total)
+                internal_table = Table(internal_table_data, colWidths=[7.8 * cm, 7.8 * cm])
 
                 # Estilos para la tabla interna (solo línea divisoria central) - espaciado mínimo
                 internal_table.setStyle(TableStyle([
@@ -431,8 +431,8 @@ class OrdersReportGenerator:
 
                     # Fuente con leading reducido
                     ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 11),  # Aumentado de 9 a 11 para mejor legibilidad
-                    ('LEADING', (0, 0), (-1, -1), 12),  # Aumentado de 10 a 12 para mejor legibilidad
+                    ('FONTSIZE', (0, 0), (-1, -1), 13),  # Aumentado de 12 a 13 para mejor legibilidad
+                    ('LEADING', (0, 0), (-1, -1), 14),  # Aumentado de 13 a 14 para mejor legibilidad
                 ]))
 
                 # Crear el contenido de la celda con la tabla interna
@@ -456,20 +456,30 @@ class OrdersReportGenerator:
             else:
                 created_at_client = order.created_at
 
-            # Crear número de orden con fecha debajo
-            order_number_with_date = f"{order.order_number}<br/><font size='9'>{created_at_client.strftime('%d/%m/%Y')}</font>"
+            # Crear número de orden con fecha y estado debajo
+            order_number_with_date_status = f"{order.order_number}<br/><font size='9'>{created_at_client.strftime('%d/%m/%Y')}<br/>{status_text}</font>"
 
             row = [
-                Paragraph(order_number_with_date, self.styles['OrderNumberText']),
-                status_text,
+                Paragraph(order_number_with_date_status, self.styles['OrderNumberText']),
                 products_content,
                 f"Q {order.total_amount:,.2f}"
             ]
             table_data.append(row)
+            
+            # Agregar fila de nota si la orden tiene notas
+            if order.notes and order.notes.strip():
+                note_text = f"<b>Nota:</b> {order.notes.strip()}"
+                note_row = [
+                    Paragraph(note_text, self.styles['CompactText']),  # Nota empieza desde la primera columna
+                    "",  # Columna Productos vacía (se unirá con SPAN)
+                    ""   # Columna Total vacía
+                ]
+                table_data.append(note_row)
 
         # Crear tabla de órdenes (expandir columna de productos con 2 columnas internas) - optimizada para más espacio
         # Ajustado para dar más espacio a productos y evitar superposición de nombres largos
-        col_widths = [2.7 * cm, 1.8 * cm, 13.3 * cm, 2.0 * cm]
+        # Sin columna de estado, más espacio para productos
+        col_widths = [2.5 * cm, 15.6 * cm, 2.0 * cm]
         orders_table = Table(table_data, colWidths=col_widths)
 
         table_style = [
@@ -485,12 +495,10 @@ class OrdersReportGenerator:
             # Data rows - tamaño de fuente general
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -1), 11),  # Aumentado de 9 a 11 para mejor legibilidad
-            # Números de orden y estado con tamaño aumentado un punto
+            # Números de orden con tamaño aumentado un punto
             ('FONTSIZE', (0, 1), (0, -1), 9),  # No. Orden - aumentado de 8 a 9
-            ('FONTSIZE', (1, 1), (1, -1), 10),  # Estado - aumentado de 9 a 10
             ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # No. Orden centrado
-            ('ALIGN', (1, 1), (1, -1), 'CENTER'),  # Estado centrado
-            ('ALIGN', (3, 1), (3, -1), 'RIGHT'),   # Total a la derecha
+            ('ALIGN', (2, 1), (2, -1), 'RIGHT'),   # Total a la derecha
             ('VALIGN', (0, 1), (-1, -1), 'TOP'),
 
             # Borders
@@ -504,11 +512,46 @@ class OrdersReportGenerator:
             ('BOTTOMPADDING', (0, 1), (-1, -1), 1),  # Reducido de 2 a 1
         ]
 
-        # Agregar colores alternados para las filas
+        # Agregar colores alternados para las filas de órdenes (no para las filas de notas)
+        # Identificar filas de notas: son las que tienen la segunda columna (Productos) vacía
+        note_row_indices = []
+        order_row_count = 0  # Contador de filas de órdenes (sin contar notas)
+        
         for i in range(1, len(table_data)):
-            if i % 2 == 0:
-                table_style.append(
-                    ('BACKGROUND', (0, i), (-1, i), colors.Color(0.97, 0.97, 0.97)))
+            # Si la segunda columna (Productos) está vacía, es una fila de nota
+            second_cell = table_data[i][1]
+            if isinstance(second_cell, str) and second_cell.strip() == "":
+                note_row_indices.append(i)
+            else:
+                # Es una fila de orden
+                order_row_count += 1
+                # Aplicar color alternado solo a filas de órdenes pares
+                if order_row_count % 2 == 0:
+                    table_style.append(
+                        ('BACKGROUND', (0, i), (-1, i), colors.Color(0.97, 0.97, 0.97)))
+        
+        # Aplicar estilo especial a las filas de notas
+        for note_idx in note_row_indices:
+            # Fondo más visible para notas (amarillo muy claro)
+            table_style.append(
+                ('BACKGROUND', (0, note_idx), (-1, note_idx), colors.Color(0.98, 0.98, 0.90)))
+            # Unir las primeras 2 columnas (No. Orden, Productos) para la nota
+            table_style.append(
+                ('SPAN', (0, note_idx), (1, note_idx)))
+            # Alineación izquierda para la nota (que está en la primera columna)
+            table_style.append(
+                ('ALIGN', (0, note_idx), (0, note_idx), 'LEFT'))
+            # Estilo de fuente para notas
+            table_style.append(
+                ('FONTSIZE', (0, note_idx), (0, note_idx), 12))
+            # Sin borde superior para que se vea como parte de la orden anterior
+            table_style.append(
+                ('LINEABOVE', (0, note_idx), (-1, note_idx), 0, colors.Color(1, 1, 1)))
+            # Padding adicional para la nota
+            table_style.append(
+                ('TOPPADDING', (0, note_idx), (-1, note_idx), 2))
+            table_style.append(
+                ('BOTTOMPADDING', (0, note_idx), (-1, note_idx), 2))
 
         orders_table.setStyle(TableStyle(table_style))
         elements.append(orders_table)
