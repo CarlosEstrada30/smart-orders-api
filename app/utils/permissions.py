@@ -163,6 +163,34 @@ def can_view_reports(user: User) -> bool:
     return has_permission(user, [UserRole.MANAGER, UserRole.ADMIN])
 
 
+def can_manage_payments(user: User) -> bool:
+    """Puede crear y gestionar pagos"""
+    return has_permission(user,
+                          [UserRole.SALES,
+                           UserRole.SUPERVISOR,
+                           UserRole.MANAGER,
+                           UserRole.ADMIN])
+
+
+def can_view_payments(user: User) -> bool:
+    """Puede ver pagos"""
+    return has_permission(user,
+                          [UserRole.SALES,
+                           UserRole.DRIVER,
+                           UserRole.SUPERVISOR,
+                           UserRole.MANAGER,
+                           UserRole.ADMIN])
+
+
+def can_cancel_payments(user: User) -> bool:
+    """Puede cancelar pagos"""
+    return has_permission(user,
+                          [UserRole.SALES,
+                           UserRole.SUPERVISOR,
+                           UserRole.MANAGER,
+                           UserRole.ADMIN])
+
+
 def get_user_permissions(user: User) -> dict:
     """
     Retorna un diccionario con todos los permisos del usuario
@@ -206,6 +234,11 @@ def get_user_permissions(user: User) -> dict:
             },
             "reports": {
                 "can_view": can_view_reports(user)
+            },
+            "payments": {
+                "can_manage": can_manage_payments(user),
+                "can_view": can_view_payments(user),
+                "can_cancel": can_cancel_payments(user)
             }
         }
     }

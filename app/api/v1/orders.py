@@ -9,20 +9,24 @@ from ...schemas.order import (
     OrderAnalyticsSummary, StatusDistributionSummary,
     BatchOrderUpdateRequest, BatchOrderUpdateResponse
 )
+from ...schemas.payment import PaymentResponse, OrderPaymentSummary
 from ...schemas.pagination import PaginatedResponse
 from ...services.order_service import OrderService
 from ...services.compact_receipt_generator import CompactReceiptGenerator
 from ...services.orders_report_generator import OrdersReportGenerator
 from ...services.settings_service import SettingsService
+from ...services.payment_service import PaymentService
 from ...models.order import OrderStatus
-from ..dependencies import get_order_service, get_settings_service
+from ...models.payment import OrderPaymentStatus
+from ..dependencies import get_order_service, get_settings_service, get_payment_service
 from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
 from ...utils.date_filters import validate_date_range
 from ...middleware import get_request_timezone
 from ...utils.permissions import (
     can_create_orders, can_view_orders,
-    can_update_delivery_status, can_update_stock_required_status
+    can_update_delivery_status, can_update_stock_required_status,
+    can_view_payments
 )
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -74,6 +78,9 @@ def get_orders(
         search: Optional[str] = Query(
             None,
             description="Search by order number or client name"),
+        payment_status_filter: Optional[str] = Query(
+            None,
+            description="Filter by payment status (unpaid, partial, paid)"),
         paginated: bool = Query(
             True,
             description="Return paginated response with metadata"),
@@ -89,6 +96,7 @@ def get_orders(
     - date_from: Show orders from this date onwards (inclusive)
     - date_to: Show orders up to this date (inclusive)
     - search: Search by order number or client name (case-insensitive partial matching)
+    - payment_status_filter: Filter by payment status (unpaid, partial, paid)
     - paginated: Return paginated response with metadata (default: True)
 
     Response:
@@ -122,10 +130,23 @@ def get_orders(
                 detail=f"Invalid status: {status_filter}. Valid values are: {', '.join([s.value for s in OrderStatus])}"
             )
 
+    # Convert payment_status filter to enum if provided
+    payment_status_enum = None
+    if payment_status_filter:
+        try:
+            payment_status_enum = OrderPaymentStatus(payment_status_filter)
+        except ValueError:
+            valid_values = ', '.join([s.value for s in OrderPaymentStatus])
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid payment_status: {payment_status_filter}. "
+                       f"Valid values are: {valid_values}"
+            )
+
     # Choose response format based on paginated parameter
     if paginated:
         # Use paginated response with full metadata
-        if any([status_enum, route_id, date_from_utc, date_to_utc, search]):
+        if any([status_enum, route_id, date_from_utc, date_to_utc, search, payment_status_enum]):
             return order_service.get_orders_paginated(
                 db,
                 skip=skip,
@@ -135,7 +156,8 @@ def get_orders(
                 date_from=date_from_utc,
                 date_to=date_to_utc,
                 search=search,
-                client_timezone=client_timezone
+                client_timezone=client_timezone,
+                payment_status=payment_status_enum
             )
         else:
             # No filters but paginated response
@@ -143,7 +165,7 @@ def get_orders(
                 db, skip=skip, limit=limit)
     else:
         # Backward compatibility: return simple list
-        if any([status_enum, route_id, date_from_utc, date_to_utc, search]):
+        if any([status_enum, route_id, date_from_utc, date_to_utc, search, payment_status_enum]):
             return order_service.get_orders_with_filters(
                 db,
                 skip=skip,
@@ -153,7 +175,8 @@ def get_orders(
                 date_from=date_from_utc,
                 date_to=date_to_utc,
                 search=search,
-                client_timezone=client_timezone
+                client_timezone=client_timezone,
+                payment_status=payment_status_enum
             )
         else:
             return order_service.get_orders(db, skip=skip, limit=limit)
@@ -387,6 +410,51 @@ def get_orders_by_client(
     return orders
 
 
+# ===== ENDPOINTS DE PAGOS DE ÓRDENES =====
+
+@router.get("/{order_id}/payments", response_model=List[PaymentResponse])
+def get_order_payments(
+    order_id: int,
+    only_confirmed: bool = Query(True, description="Solo mostrar pagos confirmados"),
+    db: Session = Depends(get_tenant_db),
+    payment_service: PaymentService = Depends(get_payment_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Obtener todos los pagos de una orden (requiere permiso de ver pagos)"""
+    # Verificar permisos
+    if not can_view_payments(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver pagos."
+        )
+
+    payments = payment_service.get_payments_by_order(
+        db, order_id=order_id, only_confirmed=only_confirmed
+    )
+    return payments
+
+
+@router.get("/{order_id}/payment-summary", response_model=OrderPaymentSummary)
+def get_order_payment_summary(
+    order_id: int,
+    db: Session = Depends(get_tenant_db),
+    payment_service: PaymentService = Depends(get_payment_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Obtener resumen completo de pagos de una orden (requiere permiso de ver pagos)"""
+    # Verificar permisos
+    if not can_view_payments(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver pagos."
+        )
+
+    summary = payment_service.get_order_payment_summary(db, order_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    return summary
+
+
 # ===== COMPROBANTES DE ÓRDENES =====
 
 @router.get("/{order_id}/receipt", response_class=StreamingResponse)
@@ -603,10 +671,10 @@ def _parse_status_filter(
 
 
 def _get_filtered_orders(order_service, db, status_enum,
-                         route_id, date_from, date_to, search, 
+                         route_id, date_from, date_to, search,
                          exclude_cancelled=False, client_timezone=None):
     """Get orders with applied filters
-    
+
     Args:
         exclude_cancelled: If True and status_enum is None, exclude cancelled orders
         client_timezone: Client timezone for date filtering in SQL
@@ -628,7 +696,10 @@ def _get_filtered_orders(order_service, db, status_enum,
         )
         # Filter out cancelled orders
         # Compare by value to handle both enum and string representations
-        cancelled_value = OrderStatus.CANCELLED.value if hasattr(OrderStatus.CANCELLED, 'value') else str(OrderStatus.CANCELLED)
+        if hasattr(OrderStatus.CANCELLED, 'value'):
+            cancelled_value = OrderStatus.CANCELLED.value
+        else:
+            cancelled_value = str(OrderStatus.CANCELLED)
         orders = [order for order in orders if str(order.status) != cancelled_value]
     else:
         orders = order_service.get_orders_with_filters(
@@ -664,7 +735,7 @@ def _get_company_settings(settings_service, db):
 
 def _get_raw_orders(db, orders, exclude_cancelled=False):
     """Convert order responses to raw order objects for PDF generation
-    
+
     Args:
         exclude_cancelled: If True, exclude cancelled orders from the final list
     """

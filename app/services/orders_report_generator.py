@@ -28,38 +28,38 @@ def format_quantity(quantity) -> str:
 def truncate_product_text(text: str, max_width_cm: float, font_size: int = 11, font_name: str = 'Helvetica') -> str:
     """
     Trunca un texto para que quepa en un ancho máximo dado.
-    
+
     Args:
         text: Texto a truncar
         max_width_cm: Ancho máximo en centímetros
         font_size: Tamaño de fuente en puntos
         font_name: Nombre de la fuente
-    
+
     Returns:
         Texto truncado sin puntos suspensivos para maximizar caracteres visibles
     """
     try:
         # Convertir cm a puntos (1 cm = 28.35 puntos aproximadamente)
         max_width_pts = max_width_cm * 28.35
-        
+
         # Medir el ancho del texto completo
         text_width = stringWidth(text, font_name, font_size)
-        
+
         # Si el texto cabe, retornarlo completo
         if text_width <= max_width_pts:
             return text
-        
+
         # Si no cabe, truncar progresivamente sin agregar "..."
         # Empezar con una estimación basada en la proporción
         estimated_chars = max(1, int(len(text) * (max_width_pts / text_width)))
-        
+
         # Ajustar la estimación probando diferentes longitudes
         # Buscar desde la estimación hacia abajo
         for length in range(estimated_chars, 0, -1):
             truncated = text[:length]
             if stringWidth(truncated, font_name, font_size) <= max_width_pts:
                 return truncated
-        
+
         # Si incluso con un solo carácter no cabe, retornar el primer carácter
         return text[0] if len(text) > 0 else ""
     except Exception:
@@ -457,7 +457,10 @@ class OrdersReportGenerator:
                 created_at_client = order.created_at
 
             # Crear número de orden con fecha y estado debajo
-            order_number_with_date_status = f"{order.order_number}<br/><font size='9'>{created_at_client.strftime('%d/%m/%Y')}<br/>{status_text}</font>"
+            date_str = created_at_client.strftime('%d/%m/%Y')
+            order_number_with_date_status = (
+                f"{order.order_number}<br/><font size='9'>{date_str}<br/>{status_text}</font>"
+            )
 
             row = [
                 Paragraph(order_number_with_date_status, self.styles['OrderNumberText']),
@@ -465,7 +468,7 @@ class OrdersReportGenerator:
                 f"Q {order.total_amount:,.2f}"
             ]
             table_data.append(row)
-            
+
             # Agregar fila de nota si la orden tiene notas
             if order.notes and order.notes.strip():
                 note_text = f"<b>Nota:</b> {order.notes.strip()}"
@@ -516,7 +519,7 @@ class OrdersReportGenerator:
         # Identificar filas de notas: son las que tienen la segunda columna (Productos) vacía
         note_row_indices = []
         order_row_count = 0  # Contador de filas de órdenes (sin contar notas)
-        
+
         for i in range(1, len(table_data)):
             # Si la segunda columna (Productos) está vacía, es una fila de nota
             second_cell = table_data[i][1]
@@ -529,7 +532,7 @@ class OrdersReportGenerator:
                 if order_row_count % 2 == 0:
                     table_style.append(
                         ('BACKGROUND', (0, i), (-1, i), colors.Color(0.97, 0.97, 0.97)))
-        
+
         # Aplicar estilo especial a las filas de notas
         for note_idx in note_row_indices:
             # Fondo más visible para notas (amarillo muy claro)

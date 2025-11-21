@@ -6,9 +6,11 @@ from ..models.inventory_entry import EntryType, EntryStatus
 
 class InventoryEntryItemBase(BaseModel):
     product_id: int
-    quantity: float = Field(...,
-                          gt=0,
-                          description="Quantity must be greater than 0")
+    quantity: float = Field(
+        ...,
+        gt=0,
+        description="Quantity must be greater than 0"
+    )
     unit_cost: float = Field(
         default=0.0,
         ge=0,

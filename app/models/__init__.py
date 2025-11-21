@@ -9,6 +9,7 @@ from .inventory_entry import InventoryEntry, InventoryEntryItem, EntryType, Entr
 from .product_route_price import ProductRoutePrice
 from .tenant import Tenant
 from .settings import Settings
+from .payment import Payment, PaymentStatus, PaymentMethod as PaymentMethodEnum, OrderPaymentStatus
 
 __all__ = [
     "Base",
@@ -28,4 +29,8 @@ __all__ = [
     "EntryStatus",
     "ProductRoutePrice",
     "Tenant",
-    "Settings"]
+    "Settings",
+    "Payment",
+    "PaymentStatus",
+    "PaymentMethodEnum",
+    "OrderPaymentStatus"]
