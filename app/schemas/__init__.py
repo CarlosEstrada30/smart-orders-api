@@ -7,6 +7,7 @@ from .tenant import TenantCreate, TenantUpdate, TenantResponse
 from .settings import SettingsCreate, SettingsUpdate, SettingsResponse, LogoUploadResponse, SettingsFormData
 from .pagination import PaginatedResponse, PaginationInfo
 from .bulk_upload import BulkUploadResult, BulkUploadError, ClientBulkUploadResult, ProductBulkUploadResult
+from .ai import AIQueryRequest, AIQueryResponse
 
 __all__ = [
     "UserCreate",
@@ -39,4 +40,6 @@ __all__ = [
     "BulkUploadResult",
     "BulkUploadError",
     "ClientBulkUploadResult",
-    "ProductBulkUploadResult"]
+    "ProductBulkUploadResult",
+    "AIQueryRequest",
+    "AIQueryResponse"]
