@@ -7,7 +7,7 @@ from .middleware import TimezoneMiddleware
 from .api.v1 import (
     users, clients, products, orders, routes, auth,
     invoices, inventory, tenants, settings,
-    product_route_prices, production
+    product_route_prices, production, payments, ai
 )
 import os
 
@@ -43,12 +43,14 @@ app.include_router(clients.router, prefix="/api/v1")
 app.include_router(products.router, prefix="/api/v1")
 app.include_router(routes.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
+app.include_router(payments.router, prefix="/api/v1")
 app.include_router(invoices.router, prefix="/api/v1")
 app.include_router(inventory.router, prefix="/api/v1")
 app.include_router(tenants.router, prefix="/api/v1")
 app.include_router(settings.router, prefix="/api/v1")
 app.include_router(product_route_prices.router, prefix="/api/v1")
 app.include_router(production.router, prefix="/api/v1/production")
+app.include_router(ai.router, prefix="/api/v1")
 
 
 @app.get("/")

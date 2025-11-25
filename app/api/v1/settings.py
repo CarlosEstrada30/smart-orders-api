@@ -35,17 +35,47 @@ def get_current_tenant(
 ) -> Optional[Tenant]:
     """
     Obtiene el tenant actual desde el JWT token.
-    Retorna None si no hay tenant (usuario en schema public).
+    Si el tenant_schema es "public", crea un objeto Tenant en memoria.
+    Retorna None solo si no se puede decodificar el token.
     """
     try:
         # Decodificar el token para obtener información del tenant
         token_data = auth_service.verify_token(credentials.credentials)
-        if not token_data or not token_data.tenant_id:
+        if not token_data:
             return None
 
-        # Obtener el tenant completo desde la base de datos public
-        tenant = tenant_service.get_tenant(db, token_data.tenant_id)
-        return tenant
+        # Si el tenant_schema es "public", crear un objeto Tenant en memoria
+        if token_data.tenant_schema == "public":
+            tenant = Tenant(
+                id=0,  # ID ficticio para tenant público
+                token="public",
+                nombre="Public",
+                subdominio="public",
+                schema_name="public",
+                active=True,
+                is_trial=False
+            )
+            return tenant
+
+        # Si hay tenant_id, obtener el tenant completo desde la base de datos public
+        if token_data.tenant_id:
+            tenant = tenant_service.get_tenant(db, token_data.tenant_id)
+            return tenant
+
+        # Si hay tenant_schema pero no tenant_id, crear tenant en memoria con el schema
+        if token_data.tenant_schema:
+            tenant = Tenant(
+                id=0,  # ID ficticio
+                token=token_data.tenant_schema,
+                nombre=token_data.tenant_schema.title(),
+                subdominio=token_data.tenant_schema,
+                schema_name=token_data.tenant_schema,
+                active=True,
+                is_trial=False
+            )
+            return tenant
+
+        return None
 
     except Exception:
         return None

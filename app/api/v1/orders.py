@@ -4,25 +4,33 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from io import BytesIO
+import logging
 from ...schemas.order import (
     OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate,
     OrderAnalyticsSummary, StatusDistributionSummary,
     BatchOrderUpdateRequest, BatchOrderUpdateResponse
 )
+from ...schemas.payment import PaymentResponse, OrderPaymentSummary
 from ...schemas.pagination import PaginatedResponse
 from ...services.order_service import OrderService
 from ...services.compact_receipt_generator import CompactReceiptGenerator
 from ...services.orders_report_generator import OrdersReportGenerator
 from ...services.settings_service import SettingsService
+from ...services.payment_service import PaymentService
+from ...services.whatsapp_service import WhatsAppService
 from ...models.order import OrderStatus
-from ..dependencies import get_order_service, get_settings_service
+from ...models.payment import OrderPaymentStatus
+from ..dependencies import get_order_service, get_settings_service, get_payment_service, get_whatsapp_service
 from .auth import get_current_active_user, get_tenant_db
+from .settings import get_current_tenant
+from ...models.tenant import Tenant
 from ...models.user import User
 from ...utils.date_filters import validate_date_range
 from ...middleware import get_request_timezone
 from ...utils.permissions import (
     can_create_orders, can_view_orders,
-    can_update_delivery_status, can_update_stock_required_status
+    can_update_delivery_status, can_update_stock_required_status,
+    can_view_payments
 )
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -74,6 +82,9 @@ def get_orders(
         search: Optional[str] = Query(
             None,
             description="Search by order number or client name"),
+        payment_status_filter: Optional[str] = Query(
+            None,
+            description="Filter by payment status (unpaid, partial, paid)"),
         paginated: bool = Query(
             True,
             description="Return paginated response with metadata"),
@@ -89,6 +100,7 @@ def get_orders(
     - date_from: Show orders from this date onwards (inclusive)
     - date_to: Show orders up to this date (inclusive)
     - search: Search by order number or client name (case-insensitive partial matching)
+    - payment_status_filter: Filter by payment status (unpaid, partial, paid)
     - paginated: Return paginated response with metadata (default: True)
 
     Response:
@@ -122,10 +134,23 @@ def get_orders(
                 detail=f"Invalid status: {status_filter}. Valid values are: {', '.join([s.value for s in OrderStatus])}"
             )
 
+    # Convert payment_status filter to enum if provided
+    payment_status_enum = None
+    if payment_status_filter:
+        try:
+            payment_status_enum = OrderPaymentStatus(payment_status_filter)
+        except ValueError:
+            valid_values = ', '.join([s.value for s in OrderPaymentStatus])
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid payment_status: {payment_status_filter}. "
+                       f"Valid values are: {valid_values}"
+            )
+
     # Choose response format based on paginated parameter
     if paginated:
         # Use paginated response with full metadata
-        if any([status_enum, route_id, date_from_utc, date_to_utc, search]):
+        if any([status_enum, route_id, date_from_utc, date_to_utc, search, payment_status_enum]):
             return order_service.get_orders_paginated(
                 db,
                 skip=skip,
@@ -135,7 +160,8 @@ def get_orders(
                 date_from=date_from_utc,
                 date_to=date_to_utc,
                 search=search,
-                client_timezone=client_timezone
+                client_timezone=client_timezone,
+                payment_status=payment_status_enum
             )
         else:
             # No filters but paginated response
@@ -143,7 +169,7 @@ def get_orders(
                 db, skip=skip, limit=limit)
     else:
         # Backward compatibility: return simple list
-        if any([status_enum, route_id, date_from_utc, date_to_utc, search]):
+        if any([status_enum, route_id, date_from_utc, date_to_utc, search, payment_status_enum]):
             return order_service.get_orders_with_filters(
                 db,
                 skip=skip,
@@ -153,7 +179,8 @@ def get_orders(
                 date_from=date_from_utc,
                 date_to=date_to_utc,
                 search=search,
-                client_timezone=client_timezone
+                client_timezone=client_timezone,
+                payment_status=payment_status_enum
             )
         else:
             return order_service.get_orders(db, skip=skip, limit=limit)
@@ -387,6 +414,51 @@ def get_orders_by_client(
     return orders
 
 
+# ===== ENDPOINTS DE PAGOS DE ÓRDENES =====
+
+@router.get("/{order_id}/payments", response_model=List[PaymentResponse])
+def get_order_payments(
+    order_id: int,
+    only_confirmed: bool = Query(True, description="Solo mostrar pagos confirmados"),
+    db: Session = Depends(get_tenant_db),
+    payment_service: PaymentService = Depends(get_payment_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Obtener todos los pagos de una orden (requiere permiso de ver pagos)"""
+    # Verificar permisos
+    if not can_view_payments(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver pagos."
+        )
+
+    payments = payment_service.get_payments_by_order(
+        db, order_id=order_id, only_confirmed=only_confirmed
+    )
+    return payments
+
+
+@router.get("/{order_id}/payment-summary", response_model=OrderPaymentSummary)
+def get_order_payment_summary(
+    order_id: int,
+    db: Session = Depends(get_tenant_db),
+    payment_service: PaymentService = Depends(get_payment_service),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Obtener resumen completo de pagos de una orden (requiere permiso de ver pagos)"""
+    # Verificar permisos
+    if not can_view_payments(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver pagos."
+        )
+
+    summary = payment_service.get_order_payment_summary(db, order_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    return summary
+
+
 # ===== COMPROBANTES DE ÓRDENES =====
 
 @router.get("/{order_id}/receipt", response_class=StreamingResponse)
@@ -566,6 +638,137 @@ def generate_order_receipt_file(
                             detail=f"Error generating receipt: {str(e)}")
 
 
+@router.post("/{order_id}/receipt/send-whatsapp")
+def send_order_receipt_whatsapp(
+    order_id: int,
+    message: Optional[str] = Query(
+        None,
+        description=(
+            "Mensaje personalizado para acompañar el comprobante. "
+            "Si no se proporciona, se usará un mensaje por defecto."
+        )
+    ),
+    db: Session = Depends(get_tenant_db),
+    order_service: OrderService = Depends(get_order_service),
+    settings_service: SettingsService = Depends(get_settings_service),
+    whatsapp_service: WhatsAppService = Depends(get_whatsapp_service),
+    current_user: User = Depends(get_current_active_user),
+    current_tenant: Optional[Tenant] = Depends(get_current_tenant),
+    request: Request = None
+):
+    """
+    Envía el comprobante de orden por WhatsApp al cliente (requires authentication)
+
+    El comprobante se envía al número de teléfono registrado del cliente.
+    Si no se proporciona un mensaje personalizado, se usa un mensaje por defecto.
+
+    Requisitos:
+    - El cliente debe tener un número de teléfono registrado
+    - EvolutionAPI debe estar configurado correctamente
+    """
+    try:
+        # Get order
+        order = order_service.get_order(db, order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        # Get order object for PDF generation and client info
+        from ...repositories.order_repository import OrderRepository
+        order_repo = OrderRepository()
+        order_obj = order_repo.get(db, order_id)
+
+        if not order_obj:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        # Validar que el cliente tenga número de teléfono
+        if not order_obj.client or not order_obj.client.phone:
+            raise HTTPException(
+                status_code=400,
+                detail="El cliente no tiene un número de teléfono registrado. "
+                       "Por favor, actualice la información del cliente antes de enviar el comprobante."
+            )
+
+        # Get company settings
+        settings = settings_service.get_company_settings(db)
+        if not settings:
+            raise HTTPException(
+                status_code=404,
+                detail="Company settings not found. Please configure company information first."
+            )
+
+        # Create receipt generator
+        receipt_generator = CompactReceiptGenerator()
+
+        # Get client timezone and pass to PDF generator
+        client_timezone = get_request_timezone(request) if request else None
+
+        # Generate PDF buffer in memory
+        pdf_buffer = receipt_generator.generate_receipt_buffer(
+            order_obj, settings, client_timezone)
+
+        # Generate filename
+        filename = f"comprobante_{order_obj.order_number}.pdf"
+
+        # Prepare WhatsApp message (caption)
+        if not message:
+            message = (
+                f"¡Hola {order_obj.client.name}!\n\n"
+                f"Adjunto el comprobante de tu pedido #{order_obj.order_number}.\n\n"
+                f"Gracias por tu preferencia."
+            )
+
+        # Get client phone number and clean it
+        client_phone = order_obj.client.phone.strip()
+
+        # Remove common phone number formatting characters
+        client_phone = client_phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "").replace("+", "")
+
+        if not client_phone.startswith("502"):
+            client_phone = "502" + client_phone
+
+        # Validar que existe un tenant con schema_name
+        if not current_tenant or not current_tenant.schema_name:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo determinar la instancia de WhatsApp. "
+                       "El tenant no está configurado correctamente."
+            )
+
+        # Get instance_name from tenant schema
+        instance_name = current_tenant.schema_name
+
+        # Send document via WhatsApp using tenant_schema as instance_name
+        whatsapp_response = whatsapp_service.send_document(
+            to=client_phone,
+            file_buffer=pdf_buffer,
+            filename=filename,
+            instance_name=instance_name,
+            caption=message
+        )
+
+        return {
+            "message": "Comprobante enviado exitosamente por WhatsApp",
+            "order_id": order_id,
+            "order_number": order_obj.order_number,
+            "client_name": order_obj.client.name,
+            "client_phone": client_phone,
+            "whatsapp_response": whatsapp_response
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        # Re-raise HTTPExceptions (like 404, 400)
+        raise
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error enviando comprobante por WhatsApp: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error enviando comprobante por WhatsApp: {str(e)}"
+        )
+
+
 # ===== REPORTE DE ÓRDENES EN PDF =====
 
 # Helper functions for complex report generation
@@ -603,10 +806,10 @@ def _parse_status_filter(
 
 
 def _get_filtered_orders(order_service, db, status_enum,
-                         route_id, date_from, date_to, search, 
+                         route_id, date_from, date_to, search,
                          exclude_cancelled=False, client_timezone=None):
     """Get orders with applied filters
-    
+
     Args:
         exclude_cancelled: If True and status_enum is None, exclude cancelled orders
         client_timezone: Client timezone for date filtering in SQL
@@ -628,7 +831,10 @@ def _get_filtered_orders(order_service, db, status_enum,
         )
         # Filter out cancelled orders
         # Compare by value to handle both enum and string representations
-        cancelled_value = OrderStatus.CANCELLED.value if hasattr(OrderStatus.CANCELLED, 'value') else str(OrderStatus.CANCELLED)
+        if hasattr(OrderStatus.CANCELLED, 'value'):
+            cancelled_value = OrderStatus.CANCELLED.value
+        else:
+            cancelled_value = str(OrderStatus.CANCELLED)
         orders = [order for order in orders if str(order.status) != cancelled_value]
     else:
         orders = order_service.get_orders_with_filters(
@@ -664,7 +870,7 @@ def _get_company_settings(settings_service, db):
 
 def _get_raw_orders(db, orders, exclude_cancelled=False):
     """Convert order responses to raw order objects for PDF generation
-    
+
     Args:
         exclude_cancelled: If True, exclude cancelled orders from the final list
     """

@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
 from ..database import Base
+from .payment import OrderPaymentStatus
 
 
 class OrderStatus(str, enum.Enum):
@@ -28,6 +29,16 @@ class Order(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+    # Payment tracking fields
+    paid_amount = Column(Numeric(10, 2), default=0.0)  # Monto total pagado
+    # Saldo pendiente (se inicializa igual a total_amount)
+    balance_due = Column(Numeric(10, 2), default=0.0)
+    # Estado de pago de la orden
+    payment_status = Column(
+        Enum(OrderPaymentStatus, values_callable=lambda x: [e.value for e in x]),
+        default=OrderPaymentStatus.UNPAID
+    )
+
     # Relationships
     client = relationship("Client", back_populates="orders")
     route = relationship("Route", back_populates="orders")
@@ -39,6 +50,10 @@ class Order(Base):
         "Invoice",
         back_populates="order",
         uselist=False,
+        cascade="all, delete-orphan")
+    payments = relationship(
+        "Payment",
+        back_populates="order",
         cascade="all, delete-orphan")
 
 
