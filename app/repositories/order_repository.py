@@ -246,6 +246,11 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             # Round to 2 decimal places
             order.total_amount = float(total_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
 
+        # Recalculate balance_due when total_amount changes
+        # balance_due = total_amount - paid_amount
+        paid_amount = float(order.paid_amount) if order.paid_amount else 0.0
+        order.balance_due = order.total_amount - paid_amount
+
         db.commit()
         db.refresh(order)
         return order
