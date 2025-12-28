@@ -1,8 +1,11 @@
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import cm, mm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
+from reportlab.platypus import (
+    BaseDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    Image, PageBreak, Frame, PageTemplate, NextPageTemplate
+)
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from datetime import datetime
@@ -190,7 +193,8 @@ class OrdersReportGenerator:
             title: str = "Reporte de Órdenes",
             client_timezone: Optional[str] = None) -> str:
         """Genera un reporte PDF de múltiples órdenes agrupadas por cliente"""
-        doc = SimpleDocTemplate(
+        # Usar BaseDocTemplate para soportar múltiples orientaciones de página
+        doc = BaseDocTemplate(
             output_path,
             pagesize=A4,
             rightMargin=self.margin,
@@ -198,6 +202,26 @@ class OrdersReportGenerator:
             topMargin=self.margin,
             bottomMargin=self.margin
         )
+
+        # Crear frames para portrait y landscape
+        portrait_frame = Frame(
+            self.margin, self.margin,
+            A4[0] - 2 * self.margin, A4[1] - 2 * self.margin,
+            id='portrait_frame'
+        )
+
+        landscape_size = landscape(A4)
+        landscape_frame = Frame(
+            self.margin, self.margin,
+            landscape_size[0] - 2 * self.margin, landscape_size[1] - 2 * self.margin,
+            id='landscape_frame'
+        )
+
+        # Crear templates de página
+        portrait_template = PageTemplate(id='portrait', frames=[portrait_frame], pagesize=A4)
+        landscape_template = PageTemplate(id='landscape', frames=[landscape_frame], pagesize=landscape_size)
+
+        doc.addPageTemplates([portrait_template, landscape_template])
 
         story = []
 
@@ -213,14 +237,21 @@ class OrdersReportGenerator:
             story.extend(self._create_client_section(client, client_orders, client_timezone))
             # Sin espaciado adicional después del header
 
-        # Consolidado de rutas (antes del resumen general) - Nueva página
-        story.append(PageBreak())  # Salto de página para empezar en página nueva
+        # Consolidado de rutas - Nueva página
+        story.append(PageBreak())
         story.extend(self._create_route_consolidation_section(orders))
-        # Sin espaciado adicional después del header
 
-        # Resumen final
+        # Matriz de órdenes por producto (página horizontal)
+        story.append(NextPageTemplate('landscape'))
+        story.append(PageBreak())
+        story.extend(self._create_orders_matrix_section(orders, settings, title, client_timezone))
+
+        # Volver a portrait para el resumen final
+        story.append(NextPageTemplate('portrait'))
+        story.append(PageBreak())
+
+        # Resumen General (última página)
         story.extend(self._create_summary_section(orders))
-        # Sin espaciado adicional después del header
 
         # Footer
         story.extend(self._create_report_footer(settings, client_timezone))
@@ -233,7 +264,8 @@ class OrdersReportGenerator:
         """Genera el reporte y lo retorna como BytesIO buffer"""
         buffer = BytesIO()
 
-        doc = SimpleDocTemplate(
+        # Usar BaseDocTemplate para soportar múltiples orientaciones de página
+        doc = BaseDocTemplate(
             buffer,
             pagesize=A4,
             rightMargin=self.margin,
@@ -241,6 +273,26 @@ class OrdersReportGenerator:
             topMargin=self.margin,
             bottomMargin=self.margin
         )
+
+        # Crear frames para portrait y landscape
+        portrait_frame = Frame(
+            self.margin, self.margin,
+            A4[0] - 2 * self.margin, A4[1] - 2 * self.margin,
+            id='portrait_frame'
+        )
+
+        landscape_size = landscape(A4)
+        landscape_frame = Frame(
+            self.margin, self.margin,
+            landscape_size[0] - 2 * self.margin, landscape_size[1] - 2 * self.margin,
+            id='landscape_frame'
+        )
+
+        # Crear templates de página
+        portrait_template = PageTemplate(id='portrait', frames=[portrait_frame], pagesize=A4)
+        landscape_template = PageTemplate(id='landscape', frames=[landscape_frame], pagesize=landscape_size)
+
+        doc.addPageTemplates([portrait_template, landscape_template])
 
         story = []
 
@@ -256,14 +308,21 @@ class OrdersReportGenerator:
             story.extend(self._create_client_section(client, client_orders, client_timezone))
             # Sin espaciado adicional después del header
 
-        # Consolidado de rutas (antes del resumen general) - Nueva página
-        story.append(PageBreak())  # Salto de página para empezar en página nueva
+        # Consolidado de rutas - Nueva página
+        story.append(PageBreak())
         story.extend(self._create_route_consolidation_section(orders))
-        # Sin espaciado adicional después del header
 
-        # Resumen final
+        # Matriz de órdenes por producto (página horizontal)
+        story.append(NextPageTemplate('landscape'))
+        story.append(PageBreak())
+        story.extend(self._create_orders_matrix_section(orders, settings, title, client_timezone))
+
+        # Volver a portrait para el resumen final
+        story.append(NextPageTemplate('portrait'))
+        story.append(PageBreak())
+
+        # Resumen General (última página)
         story.extend(self._create_summary_section(orders))
-        # Sin espaciado adicional después del header
 
         # Footer
         story.extend(self._create_report_footer(settings, client_timezone))
@@ -732,10 +791,7 @@ class OrdersReportGenerator:
         """Crea la sección de resumen general"""
         elements = []
 
-        # Salto de página antes del resumen general
-        elements.append(PageBreak())
-
-        elements.append(Spacer(1, 2 * mm))  # Reducido de 3mm a 2mm
+        elements.append(Spacer(1, 2 * mm))
         elements.append(
             Paragraph(
                 "RESUMEN GENERAL",
@@ -871,3 +927,317 @@ class OrdersReportGenerator:
         except Exception as e:
             print(f"Error loading logo: {e}")
             return None
+
+    def _wrap_product_name(self, name: str, max_chars_per_line: int, max_lines: int = 3) -> str:
+        """
+        Divide el nombre del producto en múltiples líneas.
+        Si excede max_lines, corta en la última línea con '…'
+        """
+        words = name.split()
+        lines = []
+        current_line = ""
+
+        for word in words:
+            # Si la palabra sola es más larga que el máximo, cortarla
+            if len(word) > max_chars_per_line:
+                if current_line:
+                    lines.append(current_line.strip())
+                    current_line = ""
+                # Cortar la palabra larga
+                while len(word) > max_chars_per_line:
+                    lines.append(word[:max_chars_per_line - 1] + "-")
+                    word = word[max_chars_per_line - 1:]
+                if word:
+                    current_line = word + " "
+            elif len(current_line) + len(word) <= max_chars_per_line:
+                current_line += word + " "
+            else:
+                lines.append(current_line.strip())
+                current_line = word + " "
+
+        if current_line.strip():
+            lines.append(current_line.strip())
+
+        # Limitar a max_lines
+        if len(lines) > max_lines:
+            lines = lines[:max_lines]
+            # Truncar la última línea si es necesario
+            if len(lines[-1]) > max_chars_per_line - 1:
+                lines[-1] = lines[-1][:max_chars_per_line - 1] + "…"
+            else:
+                lines[-1] = lines[-1] + "…"
+
+        return "<br/>".join(lines)
+
+    def _create_orders_matrix_section(
+            self,
+            orders: List[Order],
+            settings: Settings,
+            title: str = "Reporte de Órdenes",
+            client_timezone: Optional[str] = None):
+        """
+        Crea una tabla matriz/pivot con órdenes como filas y productos como columnas.
+        Cada celda muestra la cantidad pedida de ese producto en esa orden.
+        """
+        elements = []
+
+        # Header con logo y información de empresa (mismo que la primera página)
+        # Reemplazar "Reporte de Órdenes" por "Venta Diaria" en el título
+        matrix_title = title.replace("Reporte de Órdenes", "Venta Diaria")
+        elements.extend(self._create_report_header(
+            settings,
+            matrix_title,
+            len(orders),
+            client_timezone
+        ))
+        elements.append(Spacer(1, 3 * mm))
+
+        # Recolectar todos los productos únicos de todas las órdenes
+        all_products = {}  # {product_id: product_name}
+        for order in orders:
+            for item in order.items:
+                if item.product.id not in all_products:
+                    all_products[item.product.id] = item.product.name
+
+        # Ordenar productos alfabéticamente por nombre (case-insensitive)
+        sorted_products = sorted(all_products.items(), key=lambda x: x[1].lower())
+        product_ids = [p[0] for p in sorted_products]
+        product_names = [p[1] for p in sorted_products]
+
+        # Calcular ancho disponible para la página landscape
+        landscape_width = landscape(A4)[0] - 2 * self.margin
+
+        # Calcular anchos de columnas dinámicamente
+        num_products = len(product_names)
+        first_col_width = 3.5 * cm   # Cliente + No. Orden
+        total_col_width = 2.2 * cm   # Total
+        payment_date_col_width = 2.0 * cm  # Pago Fecha
+        balance_col_width = 2.0 * cm  # Saldo
+
+        # Espacio disponible para columnas de productos
+        fixed_cols_width = first_col_width + total_col_width + payment_date_col_width + balance_col_width
+        available_for_products = landscape_width - fixed_cols_width
+
+        if num_products > 0:
+            # Ancho mínimo y máximo por columna de producto
+            min_product_col_width = 1.5 * cm
+            max_product_col_width = 3.5 * cm
+
+            product_col_width = available_for_products / num_products
+            product_col_width = max(min_product_col_width, min(product_col_width, max_product_col_width))
+
+            # Si no caben todos los productos, ajustar
+            if product_col_width * num_products > available_for_products:
+                product_col_width = available_for_products / num_products
+        else:
+            product_col_width = 2 * cm
+
+        # Calcular caracteres por línea aproximados para los encabezados de productos
+        chars_per_line = max(5, int(product_col_width / (0.20 * cm)))
+
+        # Crear estilo para encabezados de productos (multi-línea)
+        header_style = ParagraphStyle(
+            'MatrixHeader',
+            parent=self.styles['Normal'],
+            fontSize=7,
+            leading=8,
+            alignment=TA_CENTER,
+            textColor=colors.whitesmoke,
+            fontName='Helvetica-Bold'
+        )
+
+        # Crear estilo para la primera columna (cliente + orden)
+        client_order_style = ParagraphStyle(
+            'ClientOrderCell',
+            parent=self.styles['Normal'],
+            fontSize=8,
+            leading=10,
+            alignment=TA_LEFT,
+            textColor=colors.Color(0.1, 0.1, 0.1),
+            fontName='Helvetica'
+        )
+
+        # Crear encabezados con nombres de productos en múltiples líneas
+        header_paragraphs = [Paragraph('<b>Cliente<br/>No. Orden</b>', header_style)]
+        for name in product_names:
+            wrapped_name = self._wrap_product_name(name, chars_per_line, max_lines=3)
+            header_paragraphs.append(Paragraph(f'<b>{wrapped_name}</b>', header_style))
+        header_paragraphs.append(Paragraph('<b>Total</b>', header_style))
+        header_paragraphs.append(Paragraph('<b>Fecha<br/>Pago</b>', header_style))
+        header_paragraphs.append(Paragraph('<b>Saldo</b>', header_style))
+
+        table_data = [header_paragraphs]
+
+        # Crear mapa de producto_id -> índice de columna
+        product_col_index = {pid: idx for idx, pid in enumerate(product_ids)}
+
+        # Ordenar órdenes por nombre de cliente
+        sorted_orders = sorted(orders, key=lambda o: o.client.name)
+
+        # Inicializar totales por producto (para la fila de totales)
+        product_totals = [0.0] * num_products
+
+        # Estilo para la nota con fondo amarillo
+        note_style = ParagraphStyle(
+            'MatrixNoteStyle',
+            parent=self.styles['Normal'],
+            fontSize=6,
+            leading=7,
+            alignment=TA_LEFT,
+            textColor=colors.Color(0.1, 0.1, 0.1),
+            fontName='Helvetica'
+        )
+
+        # Crear filas para cada orden
+        for order in sorted_orders:
+            # Primera columna: Cliente (nombre arriba) + No. Orden (abajo, más pequeño)
+            client_order_text = (
+                f"<b>{order.client.name}</b><br/>"
+                f"<font size='6' color='#666666'>{order.order_number}</font>"
+            )
+
+            # Si hay nota, crear una tabla anidada con fondo amarillo para la nota
+            if order.notes and order.notes.strip():
+                # Truncar nota si es muy larga (máximo ~50 caracteres)
+                note = order.notes.strip()
+                if len(note) > 50:
+                    note = note[:47] + "..."
+
+                # Crear tabla interna: fila 1 = cliente+orden, fila 2 = nota con fondo
+                inner_data = [
+                    [Paragraph(client_order_text, client_order_style)],
+                    [Paragraph(f"<b>Nota:</b> {note}", note_style)]
+                ]
+                inner_table = Table(inner_data, colWidths=[first_col_width - 6])
+                inner_table.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+                    # Fondo amarillo claro solo para la fila de la nota
+                    ('BACKGROUND', (0, 1), (-1, 1), colors.Color(0.98, 0.98, 0.90)),
+                ]))
+                first_cell = inner_table
+            else:
+                # Sin nota, solo el texto normal
+                first_cell = Paragraph(client_order_text, client_order_style)
+
+            # Crear fila
+            row = [first_cell]
+
+            # Inicializar cantidades de productos como vacías
+            product_quantities = [''] * num_products
+
+            # Llenar cantidades de productos que están en esta orden
+            for item in order.items:
+                col_idx = product_col_index.get(item.product.id)
+                if col_idx is not None:
+                    quantity = float(item.quantity)
+                    product_quantities[col_idx] = format_quantity(item.quantity)
+                    product_totals[col_idx] += quantity
+
+            row.extend(product_quantities)
+
+            # Columna Total de la orden
+            row.append(f"Q {order.total_amount:,.2f}")
+
+            # Columnas Pago Fecha y Saldo (vacías para llenar a mano)
+            row.append('')
+            row.append('')
+
+            table_data.append(row)
+
+        # Agregar fila de totales al final
+        totals_row_style = ParagraphStyle(
+            'TotalsRowCell',
+            parent=self.styles['Normal'],
+            fontSize=8,
+            leading=10,
+            alignment=TA_CENTER,
+            textColor=colors.Color(0.1, 0.1, 0.1),
+            fontName='Helvetica-Bold'
+        )
+
+        totals_row = [Paragraph('<b>TOTALES</b>', totals_row_style)]
+        for total in product_totals:
+            if total > 0:
+                totals_row.append(Paragraph(f'<b>{format_quantity(total)}</b>', totals_row_style))
+            else:
+                totals_row.append('')
+
+        # Total general de todas las órdenes
+        grand_total = sum(order.total_amount for order in orders)
+        totals_row.append(Paragraph(f'<b>Q {grand_total:,.2f}</b>', totals_row_style))
+
+        # Columnas Pago Fecha y Saldo en totales (vacías)
+        totals_row.append('')
+        totals_row.append('')
+
+        table_data.append(totals_row)
+
+        # Calcular anchos de columnas
+        col_widths = ([first_col_width] +
+                      [product_col_width] * num_products +
+                      [total_col_width, payment_date_col_width, balance_col_width])
+
+        # Crear la tabla
+        matrix_table = Table(table_data, colWidths=col_widths)
+
+        # Índice de la fila de totales
+        totals_row_idx = len(table_data) - 1
+
+        # Estilo de la tabla (mismo diseño que las tablas de arriba)
+        table_style = [
+            # Header - mismo estilo que las otras tablas
+            ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.3, 0.3, 0.3)),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+            ('TOPPADDING', (0, 0), (-1, 0), 4),
+
+            # Data rows (excluyendo la fila de totales)
+            ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -2), 9),
+            ('ALIGN', (0, 1), (0, -2), 'LEFT'),  # Cliente/Orden a la izquierda
+            ('ALIGN', (1, 1), (-2, -2), 'CENTER'),  # Cantidades centradas
+            ('ALIGN', (-1, 1), (-1, -2), 'RIGHT'),  # Total a la derecha
+            ('VALIGN', (0, 1), (-1, -2), 'TOP'),
+
+            # Fila de totales - mismo estilo gris que el header
+            ('BACKGROUND', (0, totals_row_idx), (-1, totals_row_idx), colors.Color(0.9, 0.9, 0.9)),
+            ('FONTNAME', (0, totals_row_idx), (-1, totals_row_idx), 'Helvetica-Bold'),
+            ('ALIGN', (0, totals_row_idx), (-1, totals_row_idx), 'CENTER'),
+            ('VALIGN', (0, totals_row_idx), (-1, totals_row_idx), 'MIDDLE'),
+            ('LINEABOVE', (0, totals_row_idx), (-1, totals_row_idx), 1, colors.Color(0.3, 0.3, 0.3)),
+            ('TOPPADDING', (0, totals_row_idx), (-1, totals_row_idx), 4),
+            ('BOTTOMPADDING', (0, totals_row_idx), (-1, totals_row_idx), 4),
+
+            # Borders - mismo estilo que las otras tablas
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.Color(0.7, 0.7, 0.7)),
+            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.Color(0.3, 0.3, 0.3)),
+
+            # Padding - mismo que las otras tablas
+            ('LEFTPADDING', (0, 0), (-1, -1), 1),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 1),
+            ('TOPPADDING', (0, 1), (-1, -2), 1),
+            ('BOTTOMPADDING', (0, 1), (-1, -2), 1),
+        ]
+
+        # Agregar colores alternados para las filas de datos (no header ni totales)
+        for i in range(1, totals_row_idx):
+            if i % 2 == 0:
+                table_style.append(
+                    ('BACKGROUND', (0, i), (-1, i), colors.Color(0.97, 0.97, 0.97)))
+
+        # Columna de totales en negrita
+        table_style.append(
+            ('FONTNAME', (-1, 1), (-1, -2), 'Helvetica-Bold'))
+
+        matrix_table.setStyle(TableStyle(table_style))
+        elements.append(matrix_table)
+
+        return elements
