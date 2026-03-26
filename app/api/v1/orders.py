@@ -1051,6 +1051,9 @@ def get_monthly_orders_analytics(
         end_date: Optional[date] = Query(
             None,
             description="End date for analysis (YYYY-MM-DD)"),
+        route_id: Optional[int] = Query(
+            None,
+            description="Filter by specific route ID"),
         db: Session = Depends(get_tenant_db),
         order_service: OrderService = Depends(get_order_service),
         current_user: User = Depends(get_current_active_user)):
@@ -1101,7 +1104,8 @@ def get_monthly_orders_analytics(
             status=status_enum,
             year=year,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            route_id=route_id
         )
 
         return analytics_data
@@ -1190,3 +1194,87 @@ def get_status_distribution(
         raise HTTPException(
             status_code=500,
             detail=f"Error getting status distribution: {str(e)}")
+
+
+@router.get("/analytics/top-clients")
+def get_top_clients(
+        limit: int = Query(10, ge=1, le=50, description="Number of top clients to return"),
+        year: Optional[int] = Query(None, description="Filter by specific year"),
+        route_id: Optional[int] = Query(None, description="Filter by specific route ID"),
+        db: Session = Depends(get_tenant_db),
+        order_service: OrderService = Depends(get_order_service),
+        current_user: User = Depends(get_current_active_user)):
+    """Get top clients ranked by total order revenue.
+
+    Returns clients sorted by total amount spent, excluding cancelled orders.
+    """
+    if not can_view_orders(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver analíticos de pedidos."
+        )
+    try:
+        return order_service.get_top_clients_analytics(db, limit=limit, year=year, route_id=route_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting top clients: {str(e)}")
+
+
+@router.get("/analytics/by-route")
+def get_orders_by_route(
+        year: Optional[int] = Query(None, description="Filter by specific year"),
+        db: Session = Depends(get_tenant_db),
+        order_service: OrderService = Depends(get_order_service),
+        current_user: User = Depends(get_current_active_user)):
+    """Get order count and revenue grouped by delivery route.
+
+    Returns all routes with their order counts and revenue totals.
+    Orders without a route are grouped as 'Sin ruta'.
+    """
+    if not can_view_orders(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver analíticos de pedidos."
+        )
+    try:
+        return order_service.get_orders_by_route_analytics(db, year=year)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting orders by route: {str(e)}")
+
+
+@router.get("/analytics/production-forecast")
+def get_production_forecast(
+        days_ahead: int = Query(3, ge=1, le=7, description="Days to forecast (1-7)"),
+        history_days: int = Query(90, ge=30, le=365, description="Days of history to use"),
+        route_id: Optional[int] = Query(None, description="Filter by specific route ID"),
+        db: Session = Depends(get_tenant_db),
+        order_service: OrderService = Depends(get_order_service),
+        current_user: User = Depends(get_current_active_user)):
+    """Forecast daily product demand for the next N days.
+
+    Uses historical OrderItems to build a weekly signature per product,
+    applies a recent trend factor, and projects forward.
+    Returns predicted quantities with confidence intervals and per-route breakdown.
+    Optionally filter by route_id to see demand for a specific delivery route.
+    """
+    if not can_view_orders(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver analíticos de pedidos."
+        )
+    try:
+        from ...services.forecast_service import ForecastService
+
+        raw = order_service.order_repository.get_daily_product_quantities(
+            db, days=history_days, route_id=route_id
+        )
+        forecast_svc = ForecastService()
+        return forecast_svc.generate_production_forecast(
+            raw,
+            days_ahead=days_ahead,
+            history_days=history_days,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating production forecast: {str(e)}"
+        )

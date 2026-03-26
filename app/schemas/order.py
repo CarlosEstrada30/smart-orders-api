@@ -171,3 +171,46 @@ class BatchOrderUpdateResponse(BaseModel):
         default_factory=list,
         description="Detailed error information for failed orders"
     )
+
+
+class TopClientData(BaseModel):
+    """Schema for a single client in the top clients ranking"""
+    client_id: int
+    client_name: str
+    total_amount: float
+    order_count: int
+    avg_order_value: float
+
+    class Config:
+        from_attributes = True
+
+
+class TopClientsResponse(BaseModel):
+    """Schema for top clients by revenue response"""
+    clients: List[TopClientData]
+    year: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+class RouteOrderData(BaseModel):
+    """Schema for a single route in the orders-by-route distribution"""
+    route_id: Optional[int] = None
+    route_name: str
+    order_count: int
+    total_amount: float
+    percentage: float
+
+    class Config:
+        from_attributes = True
+
+
+class RouteOrdersResponse(BaseModel):
+    """Schema for orders distribution by route response"""
+    routes: List[RouteOrderData]
+    total_orders: int
+    year: Optional[int] = None
+
+    class Config:
+        from_attributes = True
