@@ -464,7 +464,8 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         status: OrderStatus,
         year: Optional[int] = None,
         start_date: Optional[date] = None,
-        end_date: Optional[date] = None
+        end_date: Optional[date] = None,
+        route_id: Optional[int] = None
     ) -> List[dict]:
         """Get monthly summary of orders by status with optional year/date range filters"""
         from sqlalchemy import func, extract
@@ -497,6 +498,9 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             filters.append(
                 Order.created_at <= datetime.combine(end_date, datetime.max.time())
             )
+
+        if route_id is not None:
+            filters.append(Order.route_id == route_id)
 
         # Apply filters
         query = query.filter(and_(*filters))
@@ -551,4 +555,164 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
                 'count': int(row.count)
             }
             for row in query.all()
+        ]
+
+    def get_top_clients_by_revenue(
+        self,
+        db: Session,
+        *,
+        limit: int = 10,
+        year: Optional[int] = None,
+        route_id: Optional[int] = None
+    ) -> List[dict]:
+        """Get top clients ranked by total order revenue"""
+        from sqlalchemy import func, extract
+        from ..models.client import Client
+
+        query = db.query(
+            Order.client_id,
+            Client.name.label('client_name'),
+            func.sum(Order.total_amount).label('total_amount'),
+            func.count(Order.id).label('order_count')
+        ).join(Client, Order.client_id == Client.id)
+
+        filters = [Order.status != 'cancelled']
+        if year is not None:
+            filters.append(extract('year', Order.created_at) == year)
+        if route_id is not None:
+            filters.append(Order.route_id == route_id)
+
+        query = query.filter(and_(*filters))
+        query = query.group_by(Order.client_id, Client.name)
+        query = query.order_by(func.sum(Order.total_amount).desc())
+        query = query.limit(limit)
+
+        return [
+            {
+                'client_id': row.client_id,
+                'client_name': row.client_name,
+                'total_amount': float(row.total_amount or 0),
+                'order_count': int(row.order_count),
+            }
+            for row in query.all()
+        ]
+
+    def get_orders_by_route(
+        self,
+        db: Session,
+        *,
+        year: Optional[int] = None
+    ) -> List[dict]:
+        """Get order count and revenue grouped by delivery route"""
+        from sqlalchemy import func, extract
+        from ..models.route import Route
+
+        # Orders with a route assigned
+        query_with_route = db.query(
+            Order.route_id,
+            Route.name.label('route_name'),
+            func.count(Order.id).label('order_count'),
+            func.sum(Order.total_amount).label('total_amount')
+        ).join(Route, Order.route_id == Route.id)
+
+        filters = [Order.status != 'cancelled', Order.route_id.isnot(None)]
+        if year is not None:
+            filters.append(extract('year', Order.created_at) == year)
+
+        query_with_route = query_with_route.filter(and_(*filters))
+        query_with_route = query_with_route.group_by(Order.route_id, Route.name)
+
+        results = [
+            {
+                'route_id': row.route_id,
+                'route_name': row.route_name,
+                'order_count': int(row.order_count),
+                'total_amount': float(row.total_amount or 0),
+            }
+            for row in query_with_route.all()
+        ]
+
+        # Orders without a route assigned
+        no_route_filters = [Order.status != 'cancelled', Order.route_id.is_(None)]
+        if year is not None:
+            no_route_filters.append(extract('year', Order.created_at) == year)
+
+        no_route_count = db.query(func.count(Order.id)).filter(
+            and_(*no_route_filters)
+        ).scalar() or 0
+
+        no_route_amount = db.query(func.sum(Order.total_amount)).filter(
+            and_(*no_route_filters)
+        ).scalar() or 0
+
+        if no_route_count > 0:
+            results.append({
+                'route_id': None,
+                'route_name': 'Sin ruta',
+                'order_count': int(no_route_count),
+                'total_amount': float(no_route_amount),
+            })
+
+        return sorted(results, key=lambda x: x['order_count'], reverse=True)
+
+    def get_daily_product_quantities(
+        self,
+        db: Session,
+        *,
+        days: int = 90,
+        route_id: Optional[int] = None
+    ) -> List[dict]:
+        """Get daily quantity sold per product for the last N days.
+
+        Used by the forecast service to build the historical time series.
+        Only includes non-cancelled orders with active products.
+        """
+        from sqlalchemy import func, cast
+        from sqlalchemy.types import Date
+        from datetime import datetime, timedelta
+        from ..models.order import OrderItem
+        from ..models.product import Product
+        from ..models.route import Route
+
+        since = datetime.utcnow() - timedelta(days=days)
+
+        rows = (
+            db.query(
+                cast(Order.created_at, Date).label('order_date'),
+                Order.route_id.label('route_id'),
+                func.coalesce(Route.name, 'Sin ruta').label('route_name'),
+                OrderItem.product_id.label('product_id'),
+                Product.name.label('product_name'),
+                func.sum(OrderItem.quantity).label('total_quantity'),
+            )
+            .join(OrderItem, OrderItem.order_id == Order.id)
+            .join(Product, Product.id == OrderItem.product_id)
+            .outerjoin(Route, Route.id == Order.route_id)
+            .filter(
+                Order.status != OrderStatus.CANCELLED,
+                Order.created_at >= since,
+                Product.is_active.is_(True),
+                *([Order.route_id == route_id] if route_id is not None else []),
+            )
+            .group_by(
+                cast(Order.created_at, Date),
+                Order.route_id,
+                Route.name,
+                OrderItem.product_id,
+                Product.name,
+            )
+            .order_by(cast(Order.created_at, Date))
+            .all()
+        )
+
+        return [
+            {
+                'order_date': row.order_date,
+                'route_id': row.route_id,
+                'route_name': row.route_name,
+                'product_id': row.product_id,
+                'product_name': row.product_name,
+                'total_quantity': float(row.total_quantity or 0),
+            }
+            for row in rows
         ]

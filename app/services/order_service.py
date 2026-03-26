@@ -521,7 +521,8 @@ class OrderService:
         status: OrderStatus,
         year: Optional[int] = None,
         start_date: Optional[date] = None,
-        end_date: Optional[date] = None
+        end_date: Optional[date] = None,
+        route_id: Optional[int] = None
     ) -> dict:
         """Get monthly analytics summary for orders with specific status"""
         from ..schemas.order import OrderAnalyticsSummary, MonthlySummary
@@ -532,7 +533,8 @@ class OrderService:
             status=status,
             year=year,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            route_id=route_id
         )
 
         # Convert to proper schema format
@@ -636,6 +638,55 @@ class OrderService:
             year=year,
             period_name=period_name
         )
+
+    def get_top_clients_analytics(
+        self,
+        db: Session,
+        limit: int = 10,
+        year: Optional[int] = None,
+        route_id: Optional[int] = None
+    ):
+        """Get top clients ranked by total revenue"""
+        from ..schemas.order import TopClientData, TopClientsResponse
+
+        raw = self.order_repository.get_top_clients_by_revenue(db, limit=limit, year=year, route_id=route_id)
+
+        clients = [
+            TopClientData(
+                client_id=row['client_id'],
+                client_name=row['client_name'],
+                total_amount=row['total_amount'],
+                order_count=row['order_count'],
+                avg_order_value=row['total_amount'] / row['order_count'] if row['order_count'] else 0.0
+            )
+            for row in raw
+        ]
+
+        return TopClientsResponse(clients=clients, year=year)
+
+    def get_orders_by_route_analytics(
+        self,
+        db: Session,
+        year: Optional[int] = None
+    ):
+        """Get order count and revenue grouped by delivery route"""
+        from ..schemas.order import RouteOrderData, RouteOrdersResponse
+
+        raw = self.order_repository.get_orders_by_route(db, year=year)
+        total_orders = sum(r['order_count'] for r in raw)
+
+        routes = [
+            RouteOrderData(
+                route_id=row['route_id'],
+                route_name=row['route_name'],
+                order_count=row['order_count'],
+                total_amount=row['total_amount'],
+                percentage=round((row['order_count'] / total_orders * 100), 1) if total_orders else 0.0
+            )
+            for row in raw
+        ]
+
+        return RouteOrdersResponse(routes=routes, total_orders=total_orders, year=year)
 
     def _calculate_item_prices_for_route(self, db: Session, order_data: OrderCreate):
         """Calculate item prices based on route, using route-specific prices or default product prices"""
