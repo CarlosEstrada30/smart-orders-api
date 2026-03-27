@@ -124,7 +124,8 @@ def db_session() -> Session:
     - Crea todas las tablas al inicio
     - Limpia todas las tablas al final
     """
-    # Crear todas las tablas
+    # Limpiar estado residual de ejecuciones anteriores y crear tablas frescas
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
     # Crear sesión
