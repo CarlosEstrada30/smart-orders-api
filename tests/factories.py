@@ -120,7 +120,7 @@ class OrderItemFactory(factory.alchemy.SQLAlchemyModelFactory):
         lambda _: round(
             faker.random.uniform(
                 10, 500), 2))
-    subtotal = factory.LazyAttribute(lambda obj: obj.quantity * obj.unit_price)
+    total_price = factory.LazyAttribute(lambda obj: obj.quantity * obj.unit_price)
 
 
 def configure_factories(session):
