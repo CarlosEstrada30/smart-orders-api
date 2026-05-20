@@ -32,7 +32,7 @@ def create_client(
 @router.get("/", response_model=List[ClientResponse])
 def get_clients(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 1000,
     active_only: bool = False,
     db: Session = Depends(get_tenant_db),
     client_service: ClientService = Depends(get_client_service),
