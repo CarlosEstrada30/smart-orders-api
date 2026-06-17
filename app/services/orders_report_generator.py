@@ -703,9 +703,9 @@ class OrdersReportGenerator:
                 else:
                     # Si es un número entero, mostrar sin decimales; si tiene decimales, mostrarlos
                     if total_quantity == int(total_quantity):
-                        quantity_text = f"{int(total_quantity):,} unidades"
+                        quantity_text = f"{int(total_quantity):,}"
                     else:
-                        quantity_text = f"{total_quantity:,.2f} unidades"
+                        quantity_text = f"{total_quantity:,.2f}"
 
                 table_data.append([
                     product_name,
@@ -754,11 +754,21 @@ class OrdersReportGenerator:
             consolidation_table.setStyle(TableStyle(table_style))
             elements.append(consolidation_table)
 
-            # Total de la ruta
+            # Total de la ruta — tabla del mismo ancho que la consolidación para alinear bien
             route_total = sum(data['total_value'] for data in product_consolidation.values())
             total_products = len(product_consolidation)
             total_text = f"Total de la ruta ({total_products} productos): Q {route_total:,.2f}"
-            elements.append(Paragraph(total_text, self.styles['TotalText']))
+            total_wrapper = Table(
+                [[Paragraph(total_text, self.styles['TotalText'])]],
+                colWidths=[sum(col_widths)],
+            )
+            total_wrapper.setStyle(TableStyle([
+                ('LEFTPADDING', (0, 0), (0, 0), 0),
+                ('RIGHTPADDING', (0, 0), (0, 0), 0),
+                ('TOPPADDING', (0, 0), (0, 0), 1),
+                ('BOTTOMPADDING', (0, 0), (0, 0), 1),
+            ]))
+            elements.append(total_wrapper)
 
         return elements
 
