@@ -3,7 +3,7 @@ from reportlab.lib.units import cm, mm
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (
-    BaseDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    BaseDocTemplate, Flowable, Paragraph, Spacer, Table, TableStyle,
     Image, PageBreak, Frame, PageTemplate, NextPageTemplate
 )
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
@@ -18,6 +18,44 @@ from collections import defaultdict
 from ..models.order import Order
 from ..models.settings import Settings
 from ..utils.timezone import convert_utc_to_client_timezone
+
+
+class RotatedText(Flowable):
+    """Dibuja texto rotado 90° centrado en la celda. Para encabezados de tablas pivot."""
+
+    def __init__(self, text, col_width, row_height,
+                 font_name='Helvetica-Bold', font_size=8, color=None):
+        super().__init__()
+        self.text = text
+        self.col_width = col_width
+        self.row_height = row_height
+        self.font_name = font_name
+        self.font_size = font_size
+        self.color = color if color is not None else colors.whitesmoke
+        self.width = col_width
+        self.height = row_height
+
+    def wrap(self, availWidth, availHeight):
+        return (self.col_width, self.row_height)
+
+    def draw(self):
+        c = self.canv
+        c.saveState()
+        c.translate(self.col_width / 2, self.row_height / 2)
+        c.rotate(90)
+        c.setFont(self.font_name, self.font_size)
+        c.setFillColor(self.color)
+        available = self.row_height - 4  # 2pt padding en cada extremo al rotar
+        text = self.text
+        text_w = stringWidth(text, self.font_name, self.font_size)
+        if text_w > available:
+            ellipsis_w = stringWidth('…', self.font_name, self.font_size)
+            while len(text) > 1 and stringWidth(text, self.font_name, self.font_size) + ellipsis_w > available:
+                text = text[:-1]
+            text = text.rstrip() + '…'
+            text_w = stringWidth(text, self.font_name, self.font_size)
+        c.drawString(-text_w / 2, -self.font_size / 2, text)
+        c.restoreState()
 
 
 def format_quantity(quantity) -> str:
@@ -282,15 +320,54 @@ class OrdersReportGenerator:
         )
 
         landscape_size = landscape(A4)
+
+        # Reservar espacio arriba para encabezado repetido y abajo para numeración de página
+        _matrix_header_h = 1.5 * cm
+        _page_num_h = 0.5 * cm
         landscape_frame = Frame(
-            self.margin, self.margin,
-            landscape_size[0] - 2 * self.margin, landscape_size[1] - 2 * self.margin,
+            self.margin, self.margin + _page_num_h,
+            landscape_size[0] - 2 * self.margin,
+            landscape_size[1] - 2 * self.margin - _matrix_header_h - _page_num_h,
             id='landscape_frame'
         )
 
+        # Closure que dibuja encabezado + numeración en cada hoja landscape
+        _matrix_title = title.replace("Reporte de Órdenes", "Venta Diaria")
+        _total_orders = len(orders)
+        _margin = self.margin
+        _page_counter = [0]
+
+        def _draw_landscape_page(canvas, doc):
+            _page_counter[0] += 1
+            canvas.saveState()
+            pw = landscape_size[0]
+            ph = landscape_size[1]
+            y_top = ph - _margin
+
+            canvas.setFont('Helvetica', 9)
+            canvas.setFillColor(colors.Color(0.3, 0.3, 0.3))
+            canvas.drawCentredString(pw / 2, y_top - 10, f"{settings.company_name} | Tel: {settings.phone}")
+
+            canvas.setFont('Helvetica-Bold', 13)
+            canvas.setFillColor(colors.Color(0.2, 0.2, 0.2))
+            canvas.drawCentredString(pw / 2, y_top - 26, _matrix_title.upper())
+
+            canvas.setFont('Helvetica', 9)
+            canvas.setFillColor(colors.Color(0.3, 0.3, 0.3))
+            canvas.drawCentredString(pw / 2, y_top - 38, f"Total: {_total_orders} órdenes")
+
+            canvas.setFont('Helvetica', 9)
+            canvas.setFillColor(colors.Color(0.4, 0.4, 0.4))
+            canvas.drawCentredString(pw / 2, _margin + _page_num_h * 0.35, f"Página {_page_counter[0]}")
+
+            canvas.restoreState()
+
         # Crear templates de página
         portrait_template = PageTemplate(id='portrait', frames=[portrait_frame], pagesize=A4)
-        landscape_template = PageTemplate(id='landscape', frames=[landscape_frame], pagesize=landscape_size)
+        landscape_template = PageTemplate(
+            id='landscape', frames=[landscape_frame], pagesize=landscape_size,
+            onPage=_draw_landscape_page,
+        )
 
         doc.addPageTemplates([portrait_template, landscape_template])
 
@@ -703,9 +780,9 @@ class OrdersReportGenerator:
                 else:
                     # Si es un número entero, mostrar sin decimales; si tiene decimales, mostrarlos
                     if total_quantity == int(total_quantity):
-                        quantity_text = f"{int(total_quantity):,} unidades"
+                        quantity_text = f"{int(total_quantity):,}"
                     else:
-                        quantity_text = f"{total_quantity:,.2f} unidades"
+                        quantity_text = f"{total_quantity:,.2f}"
 
                 table_data.append([
                     product_name,
@@ -754,11 +831,21 @@ class OrdersReportGenerator:
             consolidation_table.setStyle(TableStyle(table_style))
             elements.append(consolidation_table)
 
-            # Total de la ruta
+            # Total de la ruta — tabla del mismo ancho que la consolidación para alinear bien
             route_total = sum(data['total_value'] for data in product_consolidation.values())
             total_products = len(product_consolidation)
             total_text = f"Total de la ruta ({total_products} productos): Q {route_total:,.2f}"
-            elements.append(Paragraph(total_text, self.styles['TotalText']))
+            total_wrapper = Table(
+                [[Paragraph(total_text, self.styles['TotalText'])]],
+                colWidths=[sum(col_widths)],
+            )
+            total_wrapper.setStyle(TableStyle([
+                ('LEFTPADDING', (0, 0), (0, 0), 0),
+                ('RIGHTPADDING', (0, 0), (0, 0), 0),
+                ('TOPPADDING', (0, 0), (0, 0), 1),
+                ('BOTTOMPADDING', (0, 0), (0, 0), 1),
+            ]))
+            elements.append(total_wrapper)
 
         return elements
 
@@ -981,16 +1068,7 @@ class OrdersReportGenerator:
         """
         elements = []
 
-        # Header con logo y información de empresa (mismo que la primera página)
-        # Reemplazar "Reporte de Órdenes" por "Venta Diaria" en el título
-        matrix_title = title.replace("Reporte de Órdenes", "Venta Diaria")
-        elements.extend(self._create_report_header(
-            settings,
-            matrix_title,
-            len(orders),
-            client_timezone
-        ))
-        elements.append(Spacer(1, 3 * mm))
+        # El encabezado se dibuja en cada hoja vía el callback onPage del PageTemplate landscape
 
         # Recolectar todos los productos únicos de todas las órdenes
         all_products = {}  # {product_id: product_name}
@@ -1020,8 +1098,8 @@ class OrdersReportGenerator:
 
         if num_products > 0:
             # Ancho mínimo y máximo por columna de producto
-            min_product_col_width = 1.5 * cm
-            max_product_col_width = 3.5 * cm
+            min_product_col_width = 0.75 * cm
+            max_product_col_width = 2.0 * cm
 
             product_col_width = available_for_products / num_products
             product_col_width = max(min_product_col_width, min(product_col_width, max_product_col_width))
@@ -1032,10 +1110,16 @@ class OrdersReportGenerator:
         else:
             product_col_width = 2 * cm
 
-        # Calcular caracteres por línea aproximados para los encabezados de productos
-        chars_per_line = max(5, int(product_col_width / (0.20 * cm)))
+        # Calcular altura de la fila de encabezado según el producto con nombre más largo
+        if product_names:
+            max_name_width = max(
+                stringWidth(name, 'Helvetica-Bold', 7) for name in product_names
+            )
+        else:
+            max_name_width = 0
+        header_row_height = min(max_name_width + 8, 3.5 * cm)
 
-        # Crear estilo para encabezados de productos (multi-línea)
+        # Crear estilo para encabezados fijos (Cliente, Total, Fecha Pago, Saldo)
         header_style = ParagraphStyle(
             'MatrixHeader',
             parent=self.styles['Normal'],
@@ -1057,11 +1141,19 @@ class OrdersReportGenerator:
             fontName='Helvetica'
         )
 
-        # Crear encabezados con nombres de productos en múltiples líneas
+        # Crear encabezados: columnas fijas con Paragraph, productos con RotatedText
         header_paragraphs = [Paragraph('<b>Cliente<br/>No. Orden</b>', header_style)]
         for name in product_names:
-            wrapped_name = self._wrap_product_name(name, chars_per_line, max_lines=3)
-            header_paragraphs.append(Paragraph(f'<b>{wrapped_name}</b>', header_style))
+            header_paragraphs.append(
+                RotatedText(
+                    text=name,
+                    col_width=product_col_width,
+                    row_height=header_row_height,
+                    font_name='Helvetica-Bold',
+                    font_size=7,
+                    color=colors.whitesmoke,
+                )
+            )
         header_paragraphs.append(Paragraph('<b>Total</b>', header_style))
         header_paragraphs.append(Paragraph('<b>Fecha<br/>Pago</b>', header_style))
         header_paragraphs.append(Paragraph('<b>Saldo</b>', header_style))
@@ -1182,7 +1274,13 @@ class OrdersReportGenerator:
                       [total_col_width, payment_date_col_width, balance_col_width])
 
         # Crear la tabla
-        matrix_table = Table(table_data, colWidths=col_widths)
+        row_heights = [header_row_height] + [None] * (len(table_data) - 1)
+        matrix_table = Table(
+            table_data,
+            colWidths=col_widths,
+            rowHeights=row_heights,
+            repeatRows=1,
+        )
 
         # Índice de la fila de totales
         totals_row_idx = len(table_data) - 1
@@ -1196,8 +1294,8 @@ class OrdersReportGenerator:
             ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
-            ('TOPPADDING', (0, 0), (-1, 0), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 0),
+            ('TOPPADDING', (0, 0), (-1, 0), 0),
 
             # Data rows (excluyendo la fila de totales)
             ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
