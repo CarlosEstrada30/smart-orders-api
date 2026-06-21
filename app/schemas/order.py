@@ -214,3 +214,25 @@ class RouteOrdersResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ProductSummaryItem(BaseModel):
+    """Producto con su cantidad y valor total consolidados"""
+    product_id: int
+    product_name: str
+    total_quantity: float
+    total_value: float
+
+    class Config:
+        from_attributes = True
+
+
+class ProductsSummaryResponse(BaseModel):
+    """Consolidado de productos según filtros activos"""
+    products: List[ProductSummaryItem]
+    grand_total_value: float
+    total_order_count: int
+    route_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True

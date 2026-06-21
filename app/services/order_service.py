@@ -843,3 +843,25 @@ class OrderService:
             error_message=error_message,
             products_with_errors=[]
         ))
+
+    def get_products_summary(
+        self,
+        db: Session,
+        *,
+        status: Optional[OrderStatus] = None,
+        route_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        search: Optional[str] = None,
+        client_timezone: Optional[str] = None,
+    ) -> dict:
+        """Consolidado de productos por filtros (solo órdenes con ruta asignada)."""
+        return self.order_repository.get_products_summary(
+            db,
+            status=status,
+            route_id=route_id,
+            date_from=date_from,
+            date_to=date_to,
+            search=search,
+            client_timezone=client_timezone,
+        )
