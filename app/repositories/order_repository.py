@@ -716,3 +716,128 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             }
             for row in rows
         ]
+
+    def get_products_summary(
+        self,
+        db: Session,
+        *,
+        status: Optional[OrderStatus] = None,
+        route_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        search: Optional[str] = None,
+        client_timezone: Optional[str] = None,
+    ) -> dict:
+        """Consolida cantidades y valores de productos según filtros.
+
+        Solo incluye órdenes con ruta asignada (route_id IS NOT NULL).
+        Devuelve lista plana de productos con sus totales y el gran total.
+        """
+        from ..models.product import Product
+        from ..models.route import Route
+        from ..models.client import Client
+        from sqlalchemy import func, text
+
+        filters = [Order.route_id.isnot(None)]
+
+        if status is not None:
+            status_value = status.value if hasattr(status, 'value') else str(status)
+            filters.append(
+                text("orders.status = :status").params(status=status_value.upper())
+            )
+
+        if route_id is not None:
+            filters.append(Order.route_id == route_id)
+
+        if date_from is not None:
+            if client_timezone:
+                filters.append(
+                    text("DATE(orders.created_at AT TIME ZONE :tz) >= :date_from").params(
+                        tz=client_timezone, date_from=date_from
+                    )
+                )
+            else:
+                filters.append(
+                    Order.created_at >= datetime.combine(date_from, datetime.min.time())
+                )
+
+        if date_to is not None:
+            if client_timezone:
+                filters.append(
+                    text("DATE(orders.created_at AT TIME ZONE :tz) <= :date_to").params(
+                        tz=client_timezone, date_to=date_to
+                    )
+                )
+            else:
+                filters.append(
+                    Order.created_at <= datetime.combine(date_to, datetime.max.time())
+                )
+
+        # Query de productos agrupados — select_from(Order) fija la tabla base
+        products_query = (
+            db.query(
+                OrderItem.product_id.label("product_id"),
+                Product.name.label("product_name"),
+                func.sum(OrderItem.quantity).label("total_quantity"),
+                func.sum(OrderItem.total_price).label("total_value"),
+            )
+            .select_from(Order)
+            .join(OrderItem, OrderItem.order_id == Order.id)
+            .join(Product, Product.id == OrderItem.product_id)
+            .join(Route, Route.id == Order.route_id)
+        )
+
+        # Query de total de órdenes distintas (separada para evitar doble conteo)
+        count_query = (
+            db.query(func.count(func.distinct(Order.id)))
+            .select_from(Order)
+            .join(OrderItem, OrderItem.order_id == Order.id)
+            .join(Route, Route.id == Order.route_id)
+        )
+
+        if search is not None and search.strip():
+            search_term = f"%{search.strip()}%"
+            search_filter = or_(
+                Order.order_number.ilike(search_term),
+                Client.name.ilike(search_term),
+            )
+            products_query = (
+                products_query.join(Client, Order.client_id == Client.id)
+                .filter(search_filter)
+            )
+            count_query = (
+                count_query.join(Client, Order.client_id == Client.id)
+                .filter(search_filter)
+            )
+
+        rows = (
+            products_query.filter(and_(*filters))
+            .group_by(OrderItem.product_id, Product.name)
+            .order_by(Product.name)
+            .all()
+        )
+        total_orders = count_query.filter(and_(*filters)).scalar() or 0
+
+        products = [
+            {
+                "product_id": row.product_id,
+                "product_name": row.product_name,
+                "total_quantity": float(row.total_quantity or 0),
+                "total_value": float(row.total_value or 0),
+            }
+            for row in rows
+        ]
+
+        grand_total = sum(p["total_value"] for p in products)
+
+        route_name = None
+        if route_id is not None:
+            route = db.query(Route).filter(Route.id == route_id).first()
+            route_name = route.name if route else None
+
+        return {
+            "products": products,
+            "grand_total_value": grand_total,
+            "total_order_count": total_orders,
+            "route_name": route_name,
+        }

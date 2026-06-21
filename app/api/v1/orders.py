@@ -8,7 +8,8 @@ import logging
 from ...schemas.order import (
     OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate,
     OrderAnalyticsSummary, StatusDistributionSummary,
-    BatchOrderUpdateRequest, BatchOrderUpdateResponse
+    BatchOrderUpdateRequest, BatchOrderUpdateResponse,
+    ProductsSummaryResponse
 )
 from ...schemas.payment import PaymentResponse, OrderPaymentSummary
 from ...schemas.pagination import PaginatedResponse
@@ -1239,6 +1240,59 @@ def get_orders_by_route(
         return order_service.get_orders_by_route_analytics(db, year=year)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting orders by route: {str(e)}")
+
+
+@router.get("/analytics/products-summary", response_model=ProductsSummaryResponse)
+def get_products_summary(
+        status_filter: Optional[str] = Query(None, description="Filtrar por estado de la orden"),
+        route_id: Optional[int] = Query(None, description="Filtrar por ruta"),
+        date_from: Optional[date] = Query(None, description="Fecha de inicio (YYYY-MM-DD)"),
+        date_to: Optional[date] = Query(None, description="Fecha de fin (YYYY-MM-DD)"),
+        search: Optional[str] = Query(None, description="Buscar por número de orden o nombre de cliente"),
+        db: Session = Depends(get_tenant_db),
+        order_service: OrderService = Depends(get_order_service),
+        current_user: User = Depends(get_current_active_user),
+        request: Request = None):
+    """Consolidado de productos totalizados según filtros.
+
+    Solo incluye órdenes con ruta asignada. Si no se filtra por ruta,
+    agrega los totales de todas las rutas.
+    """
+    if not can_view_orders(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver pedidos."
+        )
+
+    try:
+        validate_date_range(date_from, date_to)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    client_timezone = get_request_timezone(request) if request else None
+
+    status_enum = None
+    if status_filter:
+        try:
+            status_enum = OrderStatus(status_filter.lower())
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Estado inválido: {status_filter}"
+            )
+
+    try:
+        return order_service.get_products_summary(
+            db,
+            status=status_enum,
+            route_id=route_id,
+            date_from=date_from,
+            date_to=date_to,
+            search=search,
+            client_timezone=client_timezone,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generando el consolidado: {str(e)}")
 
 
 @router.get("/analytics/production-forecast")
