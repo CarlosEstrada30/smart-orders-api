@@ -5,14 +5,21 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import QueuePool
+from sqlalchemy.engine import Engine
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 import os
 import logging
-from typing import Optional
+import threading
+from typing import Optional, Dict
 from ..config import settings
 
 logger = logging.getLogger(__name__)
+
+# Caché global: un engine por schema. Se crea la primera vez que se necesita
+# y se reutiliza en todos los requests siguientes del proceso.
+_tenant_engines: Dict[str, Engine] = {}
+_tenant_engines_lock = threading.Lock()
 
 
 def get_engine_config_for_tenant():
@@ -45,10 +52,11 @@ def get_engine_config_for_tenant():
         if settings.DB_SSL_ROOT_CERT:
             config["connect_args"]["sslrootcert"] = settings.DB_SSL_ROOT_CERT
 
-        # Pool aún más conservador para tenants en producción
-        config["pool_size"] = min(2, config["pool_size"])
-        config["max_overflow"] = min(3, config["max_overflow"])
-        config["pool_recycle"] = min(1800, settings.DB_POOL_RECYCLE)
+        # Engines cacheados: 1 conexión activa es suficiente por schema.
+        # pool_recycle=300 evita el idle-kill de Render (~10 min).
+        config["pool_size"] = 1
+        config["max_overflow"] = 2
+        config["pool_recycle"] = 300
     else:
         # Pool ultra conservador para desarrollo local con tenants
         config["pool_size"] = 1  # Solo 1 conexión por schema en desarrollo
@@ -57,32 +65,62 @@ def get_engine_config_for_tenant():
     return config
 
 
-def get_engine_for_schema(schema_name: str):
+def get_engine_for_schema(schema_name: str) -> Engine:
     """
-    Crea un engine de SQLAlchemy configurado para un schema específico
+    Retorna un engine cacheado para el schema dado, creándolo si no existe.
+
+    El mismo engine se reutiliza en todos los requests del proceso, evitando
+    la acumulación de connection pools huérfanos.
     """
-    # Agregar comillas dobles si el schema tiene caracteres especiales
-    # y encodificar correctamente para URL (%22 en lugar de ")
-    if any(c in schema_name for c in ['-', ' ', '.', '+']):
-        quoted_schema = f'%22{schema_name}%22'
-    else:
-        quoted_schema = schema_name
+    # Ruta rápida sin lock (mayoría de requests)
+    if schema_name in _tenant_engines:
+        return _tenant_engines[schema_name]
 
-    # Crear URL con search_path específico para el schema
-    base_url = settings.get_database_url()
-    # Determinar el separador correcto para parámetros adicionales
-    separator = "&" if "?" in base_url else "?"
-    db_url = f"{base_url}{separator}options=-csearch_path%3D{quoted_schema}"
+    with _tenant_engines_lock:
+        # Segunda verificación dentro del lock — evita doble creación si dos
+        # coroutines llegaron simultáneamente con caché vacío
+        if schema_name in _tenant_engines:
+            return _tenant_engines[schema_name]
 
-    # Aplicar configuración específica para tenant
-    engine_config = get_engine_config_for_tenant()
+        if any(c in schema_name for c in ['-', ' ', '.', '+']):
+            quoted_schema = f'%22{schema_name}%22'
+        else:
+            quoted_schema = schema_name
 
-    return create_engine(
-        db_url,
-        **engine_config,
-        poolclass=QueuePool,
-        echo=False
-    )
+        base_url = settings.get_database_url()
+        separator = "&" if "?" in base_url else "?"
+        db_url = f"{base_url}{separator}options=-csearch_path%3D{quoted_schema}"
+
+        engine_config = get_engine_config_for_tenant()
+        new_engine = create_engine(
+            db_url,
+            **engine_config,
+            poolclass=QueuePool,
+            echo=False
+        )
+        _tenant_engines[schema_name] = new_engine
+        logger.info(
+            f"Engine cacheado para schema '{schema_name}' "
+            f"(pool_size={engine_config['pool_size']}, "
+            f"max_overflow={engine_config['max_overflow']}, "
+            f"pool_recycle={engine_config['pool_recycle']}s)"
+        )
+        return new_engine
+
+
+def dispose_all_tenant_engines() -> None:
+    """
+    Cierra todos los pools de conexión cacheados. Llamar en el shutdown de la app.
+    """
+    with _tenant_engines_lock:
+        count = len(_tenant_engines)
+        for schema_name, eng in list(_tenant_engines.items()):
+            try:
+                eng.dispose()
+            except Exception as e:
+                logger.warning(f"Error liberando engine para '{schema_name}': {e}")
+        _tenant_engines.clear()
+        logger.info(f"Engines de tenant liberados ({count} total)")
 
 
 def get_session_for_schema(schema_name: str):

@@ -10,6 +10,10 @@ from .api.v1 import (
     product_route_prices, production, payments, ai
 )
 import os
+import logging
+from .utils.tenant_db import dispose_all_tenant_engines
+
+logger = logging.getLogger(__name__)
 
 # IMPORTANTE: No crear tablas automáticamente en producción
 # En producción usamos migraciones de Alembic
@@ -51,6 +55,12 @@ app.include_router(settings.router, prefix="/api/v1")
 app.include_router(product_route_prices.router, prefix="/api/v1")
 app.include_router(production.router, prefix="/api/v1/production")
 app.include_router(ai.router, prefix="/api/v1")
+
+
+@app.on_event("shutdown")
+def on_shutdown() -> None:
+    logger.info("Shutdown: liberando engines de tenant...")
+    dispose_all_tenant_engines()
 
 
 @app.get("/")
