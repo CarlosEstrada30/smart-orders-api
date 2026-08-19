@@ -9,6 +9,7 @@ from typing import Optional
 from ..models.order import Order
 from ..schemas.invoice import CompanyInfo
 from ..utils.timezone import convert_utc_to_client_timezone
+from ..utils.currency import format_currency
 
 
 def format_quantity(quantity) -> str:
@@ -75,10 +76,10 @@ class ReceiptGenerator:
         self._draw_order_details(c, order, client_timezone)
 
         # Items table
-        self._draw_items_table(c, order)
+        self._draw_items_table(c, order, company_info)
 
         # Total
-        self._draw_total(c, order)
+        self._draw_total(c, order, company_info)
 
         # Footer
         self._draw_footer(c, order, company_info)
@@ -236,7 +237,11 @@ class ReceiptGenerator:
                 "..." if len(order.notes) > 80 else order.notes
             c.drawString(self.margin + 20, y, note_text)
 
-    def _draw_items_table(self, c: canvas.Canvas, order: Order):
+    def _draw_items_table(
+            self,
+            c: canvas.Canvas,
+            order: Order,
+            company_info: CompanyInfo):
         """Draw items table"""
         y = self.height - self.margin - 420
 
@@ -292,8 +297,8 @@ class ReceiptGenerator:
                 product_name,
                 description,
                 format_quantity(item.quantity),
-                f"Q {item.unit_price:,.2f}",
-                f"Q {item.total_price:,.2f}"
+                format_currency(item.unit_price, company_info.currency_code),
+                format_currency(item.total_price, company_info.currency_code)
             ]
 
             for j, data in enumerate(row_data):
@@ -307,7 +312,11 @@ class ReceiptGenerator:
         table_height = 18 + (len(order.items) * 16) + 20
         c.rect(self.margin, y + 4, sum(col_widths), table_height)
 
-    def _draw_total(self, c: canvas.Canvas, order: Order):
+    def _draw_total(
+            self,
+            c: canvas.Canvas,
+            order: Order,
+            company_info: CompanyInfo):
         """Draw total section"""
         y = 180  # Fixed position from bottom
 
@@ -324,7 +333,7 @@ class ReceiptGenerator:
         # Total amount
         c.setFont("Helvetica-Bold", 16)
         c.setFillColor(colors.darkgreen)
-        total_text = f"TOTAL: Q {order.total_amount:,.2f}"
+        total_text = f"TOTAL: {format_currency(order.total_amount, company_info.currency_code)}"
         text_width = c.stringWidth(total_text, "Helvetica-Bold", 16)
         c.drawString(total_x + (180 - text_width) / 2, y - 15, total_text)
 
@@ -349,13 +358,13 @@ class ReceiptGenerator:
 
             # Subtotal
             c.setFont("Helvetica", 9)
-            subtotal_text = f"Subtotal: Q {subtotal:,.2f}"
+            subtotal_text = f"Subtotal: {format_currency(subtotal, company_info.currency_code)}"
             subtotal_width = c.stringWidth(subtotal_text, "Helvetica", 9)
             c.drawString(total_x + 180 - subtotal_width, y, subtotal_text)
             y -= 12
 
             # Descuento
-            discount_text = f"Descuento: -Q {order.discount_amount:,.2f}"
+            discount_text = f"Descuento: -{format_currency(order.discount_amount, company_info.currency_code)}"
             discount_width = c.stringWidth(discount_text, "Helvetica", 9)
             c.drawString(total_x + 180 - discount_width, y, discount_text)
             y -= 12

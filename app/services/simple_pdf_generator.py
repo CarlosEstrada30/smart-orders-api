@@ -7,6 +7,7 @@ from io import BytesIO
 
 from ..models.invoice import Invoice
 from ..schemas.invoice import CompanyInfo
+from ..utils.currency import format_currency
 
 
 def format_quantity(quantity) -> str:
@@ -67,10 +68,10 @@ class SimplePDFGenerator:
         self._draw_client_info(c, invoice)
 
         # Items table
-        self._draw_items_table(c, invoice)
+        self._draw_items_table(c, invoice, company_info)
 
         # Totals
-        self._draw_totals(c, invoice)
+        self._draw_totals(c, invoice, company_info)
 
         # Footer
         self._draw_footer(c, invoice, company_info)
@@ -155,7 +156,11 @@ class SimplePDFGenerator:
             c.drawString(self.margin, y, line)
             y -= 15
 
-    def _draw_items_table(self, c: canvas.Canvas, invoice: Invoice):
+    def _draw_items_table(
+            self,
+            c: canvas.Canvas,
+            invoice: Invoice,
+            company_info: CompanyInfo):
         """Draw items table"""
         y = self.height - self.margin - 280
 
@@ -195,8 +200,8 @@ class SimplePDFGenerator:
                 item.product.name[:25] + "..." if len(item.product.name) > 25 else item.product.name,
                 item.product.sku or "N/A",
                 format_quantity(item.quantity),
-                f"Q {item.unit_price:,.2f}",
-                f"Q {item.total_price:,.2f}"
+                format_currency(item.unit_price, company_info.currency_code),
+                format_currency(item.total_price, company_info.currency_code)
             ]
 
             for j, data in enumerate(row_data):
@@ -210,7 +215,11 @@ class SimplePDFGenerator:
         table_height = 20 + (len(invoice.order.items) * 20) + 25
         c.rect(self.margin, y + 5, sum(col_widths), table_height)
 
-    def _draw_totals(self, c: canvas.Canvas, invoice: Invoice):
+    def _draw_totals(
+            self,
+            c: canvas.Canvas,
+            invoice: Invoice,
+            company_info: CompanyInfo):
         """Draw totals section"""
         y = 200  # Fixed position from bottom
 
@@ -221,9 +230,9 @@ class SimplePDFGenerator:
         c.setFillColor(colors.black)
 
         totals_lines = [
-            f"Subtotal: Q {invoice.subtotal:,.2f}",
-            f"Descuento: Q {invoice.discount_amount:,.2f}",
-            f"IVA (12%): Q {invoice.tax_amount:,.2f}",
+            f"Subtotal: {format_currency(invoice.subtotal, company_info.currency_code)}",
+            f"Descuento: {format_currency(invoice.discount_amount, company_info.currency_code)}",
+            f"IVA (12%): {format_currency(invoice.tax_amount, company_info.currency_code)}",
         ]
 
         for line in totals_lines:
@@ -240,7 +249,7 @@ class SimplePDFGenerator:
         y -= 15
         c.setFont("Helvetica-Bold", 14)
         c.setFillColor(colors.green)
-        total_line = f"TOTAL: Q {invoice.total_amount:,.2f}"
+        total_line = f"TOTAL: {format_currency(invoice.total_amount, company_info.currency_code)}"
         line_width = c.stringWidth(total_line, "Helvetica-Bold", 14)
         c.drawString(totals_x + 150 - line_width, y, total_line)
 
@@ -272,12 +281,12 @@ class SimplePDFGenerator:
             c.setFont("Helvetica", 10)
             c.setFillColor(colors.black)
 
-            paid_line = f"Pagado: Q {invoice.paid_amount:,.2f}"
+            paid_line = f"Pagado: {format_currency(invoice.paid_amount, company_info.currency_code)}"
             line_width = c.stringWidth(paid_line, "Helvetica", 10)
             c.drawString(totals_x + 150 - line_width, y, paid_line)
 
             y -= 12
-            balance_line = f"Saldo: Q {invoice.balance_due:,.2f}"
+            balance_line = f"Saldo: {format_currency(invoice.balance_due, company_info.currency_code)}"
             line_width = c.stringWidth(balance_line, "Helvetica", 10)
             c.drawString(totals_x + 150 - line_width, y, balance_line)
 

@@ -13,6 +13,7 @@ from typing import Optional
 from ..models.order import Order
 from ..models.settings import Settings
 from ..utils.timezone import convert_utc_to_client_timezone
+from ..utils.currency import format_currency
 
 
 def format_quantity(quantity) -> str:
@@ -129,11 +130,11 @@ class CompactReceiptGenerator:
         story.append(Spacer(1, 4 * mm))
 
         # Tabla de productos compacta
-        story.extend(self._create_compact_products_table(order))
+        story.extend(self._create_compact_products_table(order, settings.currency_code))
         story.append(Spacer(1, 4 * mm))
 
         # Total destacado
-        story.extend(self._create_compact_total_section(order))
+        story.extend(self._create_compact_total_section(order, settings.currency_code))
         story.append(Spacer(1, 4 * mm))
 
         # Footer mínimo
@@ -177,11 +178,11 @@ class CompactReceiptGenerator:
         story.append(Spacer(1, 4 * mm))
 
         # Tabla de productos compacta
-        story.extend(self._create_compact_products_table(order))
+        story.extend(self._create_compact_products_table(order, settings.currency_code))
         story.append(Spacer(1, 4 * mm))
 
         # Total destacado
-        story.extend(self._create_compact_total_section(order))
+        story.extend(self._create_compact_total_section(order, settings.currency_code))
         story.append(Spacer(1, 4 * mm))
 
         # Footer mínimo
@@ -302,7 +303,10 @@ class CompactReceiptGenerator:
         elements.append(info_table)
         return elements
 
-    def _create_compact_products_table(self, order: Order):
+    def _create_compact_products_table(
+            self,
+            order: Order,
+            currency_code: str = "GTQ"):
         """Crea la tabla de productos más compacta"""
         elements = []
 
@@ -327,9 +331,9 @@ class CompactReceiptGenerator:
                 str(i),
                 product_name,
                 format_quantity(item.quantity),
-                f"Q {item.unit_price:,.2f}",
-                # Con decimales y espacio después de Q
-                f"Q {item.total_price:,.2f}"
+                format_currency(item.unit_price, currency_code),
+                # Con decimales y espacio después del símbolo
+                format_currency(item.total_price, currency_code)
             ]
             table_data.append(row)
 
@@ -377,7 +381,10 @@ class CompactReceiptGenerator:
 
         return elements
 
-    def _create_compact_total_section(self, order: Order):
+    def _create_compact_total_section(
+            self,
+            order: Order,
+            currency_code: str = "GTQ"):
         """Crea la sección de total más compacta"""
         elements = []
 
@@ -400,7 +407,7 @@ class CompactReceiptGenerator:
             "",
             "",
             "Subtotal:",
-            f"Q {subtotal:,.2f}"
+            format_currency(subtotal, currency_code)
         ])
 
         # Descuento si aplica
@@ -409,7 +416,7 @@ class CompactReceiptGenerator:
                 "",
                 "",
                 "Descuento:",
-                f"-Q {order.discount_amount:,.2f}"
+                f"-{format_currency(order.discount_amount, currency_code)}"
             ])
 
         # Total final
@@ -417,7 +424,7 @@ class CompactReceiptGenerator:
             "",
             "",
             "TOTAL A PAGAR:",
-            f"Q {order.total_amount:,.2f}"
+            format_currency(order.total_amount, currency_code)
         ])
 
         # Ajustar anchos para que el texto "TOTAL A PAGAR" no se desborde
