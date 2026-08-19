@@ -18,6 +18,7 @@ from collections import defaultdict
 from ..models.order import Order
 from ..models.settings import Settings
 from ..utils.timezone import convert_utc_to_client_timezone
+from ..utils.currency import format_currency
 
 
 class RotatedText(Flowable):
@@ -272,12 +273,13 @@ class OrdersReportGenerator:
 
         # Generar contenido por cliente
         for client, client_orders in orders_by_client.items():
-            story.extend(self._create_client_section(client, client_orders, client_timezone))
+            story.extend(self._create_client_section(
+                client, client_orders, client_timezone, settings.currency_code))
             # Sin espaciado adicional después del header
 
         # Consolidado de rutas - Nueva página
         story.append(PageBreak())
-        story.extend(self._create_route_consolidation_section(orders))
+        story.extend(self._create_route_consolidation_section(orders, settings.currency_code))
 
         # Matriz de órdenes por producto (página horizontal)
         story.append(NextPageTemplate('landscape'))
@@ -289,7 +291,7 @@ class OrdersReportGenerator:
         story.append(PageBreak())
 
         # Resumen General (última página)
-        story.extend(self._create_summary_section(orders))
+        story.extend(self._create_summary_section(orders, settings.currency_code))
 
         # Footer
         story.extend(self._create_report_footer(settings, client_timezone))
@@ -382,12 +384,13 @@ class OrdersReportGenerator:
 
         # Generar contenido por cliente
         for client, client_orders in orders_by_client.items():
-            story.extend(self._create_client_section(client, client_orders, client_timezone))
+            story.extend(self._create_client_section(
+                client, client_orders, client_timezone, settings.currency_code))
             # Sin espaciado adicional después del header
 
         # Consolidado de rutas - Nueva página
         story.append(PageBreak())
-        story.extend(self._create_route_consolidation_section(orders))
+        story.extend(self._create_route_consolidation_section(orders, settings.currency_code))
 
         # Matriz de órdenes por producto (página horizontal)
         story.append(NextPageTemplate('landscape'))
@@ -399,7 +402,7 @@ class OrdersReportGenerator:
         story.append(PageBreak())
 
         # Resumen General (última página)
-        story.extend(self._create_summary_section(orders))
+        story.extend(self._create_summary_section(orders, settings.currency_code))
 
         # Footer
         story.extend(self._create_report_footer(settings, client_timezone))
@@ -484,7 +487,12 @@ class OrdersReportGenerator:
 
         return sorted_clients
 
-    def _create_client_section(self, client, orders: List[Order], client_timezone: Optional[str] = None):
+    def _create_client_section(
+            self,
+            client,
+            orders: List[Order],
+            client_timezone: Optional[str] = None,
+            currency_code: str = "GTQ"):
         """Crea la sección de un cliente con todas sus órdenes"""
         elements = []
 
@@ -601,7 +609,7 @@ class OrdersReportGenerator:
             row = [
                 Paragraph(order_number_with_date_status, self.styles['OrderNumberText']),
                 products_content,
-                f"Q {order.total_amount:,.2f}"
+                format_currency(order.total_amount, currency_code)
             ]
             table_data.append(row)
 
@@ -698,12 +706,18 @@ class OrdersReportGenerator:
         # Total del cliente
         client_total = sum(order.total_amount for order in orders)
         total_orders_count = len(orders)
-        total_text = f"Total del cliente ({total_orders_count} órdenes): Q {client_total:,.2f}"
+        total_text = (
+            f"Total del cliente ({total_orders_count} órdenes): "
+            f"{format_currency(client_total, currency_code)}"
+        )
         elements.append(Paragraph(total_text, self.styles['TotalText']))
 
         return elements
 
-    def _create_route_consolidation_section(self, orders: List[Order]):
+    def _create_route_consolidation_section(
+            self,
+            orders: List[Order],
+            currency_code: str = "GTQ"):
         """Crea la sección de consolidado de rutas"""
         elements = []
 
@@ -718,7 +732,7 @@ class OrdersReportGenerator:
 
         # Crear sección para cada ruta
         for route, route_orders in orders_by_route.items():
-            elements.extend(self._create_route_section(route, route_orders))
+            elements.extend(self._create_route_section(route, route_orders, currency_code))
 
         return elements
 
@@ -736,7 +750,11 @@ class OrdersReportGenerator:
         # Ordenar rutas por nombre
         return dict(sorted(orders_by_route.items(), key=lambda x: x[0].name if hasattr(x[0], 'name') else str(x[0])))
 
-    def _create_route_section(self, route, orders: List[Order]):
+    def _create_route_section(
+            self,
+            route,
+            orders: List[Order],
+            currency_code: str = "GTQ"):
         """Crea la sección de una ruta específica"""
         elements = []
 
@@ -787,7 +805,7 @@ class OrdersReportGenerator:
                 table_data.append([
                     product_name,
                     quantity_text,
-                    f"Q {total_value:,.2f}"
+                    format_currency(total_value, currency_code)
                 ])
 
             # Crear tabla
@@ -834,7 +852,10 @@ class OrdersReportGenerator:
             # Total de la ruta — tabla del mismo ancho que la consolidación para alinear bien
             route_total = sum(data['total_value'] for data in product_consolidation.values())
             total_products = len(product_consolidation)
-            total_text = f"Total de la ruta ({total_products} productos): Q {route_total:,.2f}"
+            total_text = (
+                f"Total de la ruta ({total_products} productos): "
+                f"{format_currency(route_total, currency_code)}"
+            )
             total_wrapper = Table(
                 [[Paragraph(total_text, self.styles['TotalText'])]],
                 colWidths=[sum(col_widths)],
@@ -874,7 +895,10 @@ class OrdersReportGenerator:
         # Ordenar por nombre del producto
         return dict(sorted(product_consolidation.items()))
 
-    def _create_summary_section(self, orders: List[Order]):
+    def _create_summary_section(
+            self,
+            orders: List[Order],
+            currency_code: str = "GTQ"):
         """Crea la sección de resumen general"""
         elements = []
 
@@ -908,14 +932,15 @@ class OrdersReportGenerator:
         for status, count in status_summary.items():
             status_name = status_names.get(status, status.title())
             total = status_totals[status]
-            summary_data.append([status_name, f"{count:,}", f"Q {total:,.2f}"])
+            summary_data.append(
+                [status_name, f"{count:,}", format_currency(total, currency_code)])
 
         # Total general
         total_orders = len(orders)
         grand_total = sum(order.total_amount for order in orders)
         summary_data.append(['', '', ''])  # Separador
         summary_data.append(
-            ['TOTAL GENERAL', f"{total_orders:,}", f"Q {grand_total:,.2f}"])
+            ['TOTAL GENERAL', f"{total_orders:,}", format_currency(grand_total, currency_code)])
 
         summary_table = Table(summary_data, colWidths=[8 * cm, 4 * cm, 4 * cm])
         summary_table.setStyle(TableStyle([
@@ -1232,7 +1257,7 @@ class OrdersReportGenerator:
             row.extend(product_quantities)
 
             # Columna Total de la orden
-            row.append(f"Q {order.total_amount:,.2f}")
+            row.append(format_currency(order.total_amount, settings.currency_code))
 
             # Columnas Pago Fecha y Saldo (vacías para llenar a mano)
             row.append('')
@@ -1260,7 +1285,10 @@ class OrdersReportGenerator:
 
         # Total general de todas las órdenes
         grand_total = sum(order.total_amount for order in orders)
-        totals_row.append(Paragraph(f'<b>Q {grand_total:,.2f}</b>', totals_row_style))
+        totals_row.append(
+            Paragraph(
+                f'<b>{format_currency(grand_total, settings.currency_code)}</b>',
+                totals_row_style))
 
         # Columnas Pago Fecha y Saldo en totales (vacías)
         totals_row.append('')

@@ -15,6 +15,7 @@ class Settings(Base):
     phone = Column(String)  # Teléfono de contacto
     email = Column(String)  # Email de contacto
     website = Column(String)  # Sitio web
+    currency_code = Column(String(3), nullable=False, server_default="GTQ")  # Código ISO 4217 de la moneda
     is_active = Column(Boolean, default=True, server_default="true")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

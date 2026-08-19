@@ -11,6 +11,7 @@ from .auth import get_current_active_user, get_tenant_db
 from ...models.user import User
 from ...models.tenant import Tenant
 from ...database import get_db
+from ...utils.currency import CURRENCIES
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -125,7 +126,8 @@ def _create_settings_from_form(
     address: Optional[str] = None,
     phone: Optional[str] = None,
     email: Optional[str] = None,
-    website: Optional[str] = None
+    website: Optional[str] = None,
+    currency_code: str = "GTQ"
 ) -> SettingsFormData:
     """Crea un objeto SettingsFormData desde los campos del formulario"""
     return SettingsFormData(
@@ -135,7 +137,8 @@ def _create_settings_from_form(
         address=address,
         phone=phone,
         email=email,
-        website=website
+        website=website,
+        currency_code=currency_code
     )
 
 
@@ -149,6 +152,7 @@ async def save_company_settings(
     phone: Optional[str] = Form(None),
     email: Optional[str] = Form(None),
     website: Optional[str] = Form(None),
+    currency_code: str = Form("GTQ"),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_tenant_db),
     settings_service: SettingsService = Depends(get_settings_service),
@@ -161,6 +165,9 @@ async def save_company_settings(
     This endpoint handles both creating new settings and updating existing ones.
     Only one settings record is allowed per tenant.
     """
+    if currency_code not in CURRENCIES:
+        raise HTTPException(status_code=400, detail="Moneda no soportada")
+
     try:
         # Crear objeto schema desde form data
         settings_form = _create_settings_from_form(
@@ -170,7 +177,8 @@ async def save_company_settings(
             address=address,
             phone=phone,
             email=email,
-            website=website
+            website=website,
+            currency_code=currency_code
         )
 
         # Convertir a dict para el service (manteniendo solo campos no None)

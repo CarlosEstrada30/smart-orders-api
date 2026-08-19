@@ -11,6 +11,7 @@ from typing import Optional
 from ..models.invoice import Invoice
 from ..schemas.invoice import CompanyInfo
 from ..utils.timezone import convert_utc_to_client_timezone
+from ..utils.currency import format_currency
 
 
 def format_quantity(quantity) -> str:
@@ -129,11 +130,11 @@ class InvoicePDFGenerator:
         story.append(Spacer(1, 0.3 * inch))
 
         # Invoice items table
-        story.extend(self._create_items_table(invoice))
+        story.extend(self._create_items_table(invoice, company_info))
         story.append(Spacer(1, 0.3 * inch))
 
         # Payment information and totals
-        story.extend(self._create_payment_section(invoice))
+        story.extend(self._create_payment_section(invoice, company_info))
         story.append(Spacer(1, 0.3 * inch))
 
         # Footer
@@ -236,7 +237,10 @@ class InvoicePDFGenerator:
 
         return elements
 
-    def _create_items_table(self, invoice: Invoice) -> list:
+    def _create_items_table(
+            self,
+            invoice: Invoice,
+            company_info: CompanyInfo) -> list:
         """Create the items table"""
         elements = []
 
@@ -253,8 +257,8 @@ class InvoicePDFGenerator:
                     self.styles['Normal']),
                 item.product.sku or 'N/A',
                 format_quantity(item.quantity),
-                f"Q {item.unit_price:,.2f}",
-                f"Q {item.total_price:,.2f}"]
+                format_currency(item.unit_price, company_info.currency_code),
+                format_currency(item.total_price, company_info.currency_code)]
             data.append(row)
 
         # Create table
@@ -298,18 +302,21 @@ class InvoicePDFGenerator:
         elements.append(table)
         return elements
 
-    def _create_payment_section(self, invoice: Invoice) -> list:
+    def _create_payment_section(
+            self,
+            invoice: Invoice,
+            company_info: CompanyInfo) -> list:
         """Create payment and totals section"""
         elements = []
 
         # Create totals table
         totals_data = [
-            ['Subtotal:', f"Q {invoice.subtotal:,.2f}"],
-            ['Descuento:', f"Q {invoice.discount_amount:,.2f}"],
+            ['Subtotal:', format_currency(invoice.subtotal, company_info.currency_code)],
+            ['Descuento:', format_currency(invoice.discount_amount, company_info.currency_code)],
             ['IVA ({:.0%}):'.format(invoice.tax_rate),
-             f"Q {invoice.tax_amount:,.2f}"],
+             format_currency(invoice.tax_amount, company_info.currency_code)],
             ['', ''],  # Separator row
-            ['TOTAL:', f"Q {invoice.total_amount:,.2f}"]
+            ['TOTAL:', format_currency(invoice.total_amount, company_info.currency_code)]
         ]
 
         totals_table = Table(totals_data, colWidths=[10 * cm, 4 * cm])
@@ -358,11 +365,11 @@ class InvoicePDFGenerator:
         if invoice.paid_amount > 0:
             elements.append(
                 Paragraph(
-                    f"Pagado: Q {invoice.paid_amount:,.2f}",
+                    f"Pagado: {format_currency(invoice.paid_amount, company_info.currency_code)}",
                     status_style))
             elements.append(
                 Paragraph(
-                    f"Saldo Pendiente: Q {invoice.balance_due:,.2f}",
+                    f"Saldo Pendiente: {format_currency(invoice.balance_due, company_info.currency_code)}",
                     status_style))
 
         return elements
@@ -455,9 +462,9 @@ class InvoicePDFGenerator:
         story.append(Spacer(1, 0.5 * inch))
         story.extend(self._create_client_info(invoice))
         story.append(Spacer(1, 0.3 * inch))
-        story.extend(self._create_items_table(invoice))
+        story.extend(self._create_items_table(invoice, company_info))
         story.append(Spacer(1, 0.3 * inch))
-        story.extend(self._create_payment_section(invoice))
+        story.extend(self._create_payment_section(invoice, company_info))
         story.append(Spacer(1, 0.3 * inch))
         story.extend(self._create_footer(invoice, company_info, client_timezone))
 

@@ -154,6 +154,7 @@ class CompanyInfo(BaseModel):
     email: str = "contacto@smartorders.gt"
     nit: str = "12345678-9"
     logo_path: Optional[str] = None
+    currency_code: str = "GTQ"
 
 
 # FEL (Facturación Electrónica en Línea) - Guatemala Schemas

@@ -13,6 +13,7 @@ from typing import Optional
 from ..models.order import Order
 from ..models.settings import Settings
 from ..utils.timezone import convert_utc_to_client_timezone
+from ..utils.currency import format_currency
 
 
 def format_quantity(quantity) -> str:
@@ -144,11 +145,11 @@ class ProfessionalReceiptGenerator:
         story.append(Spacer(1, 8 * mm))
 
         # Tabla de productos
-        story.extend(self._create_products_table(order))
+        story.extend(self._create_products_table(order, settings.currency_code))
         story.append(Spacer(1, 10 * mm))
 
         # Resumen y total
-        story.extend(self._create_summary_section(order))
+        story.extend(self._create_summary_section(order, settings.currency_code))
         story.append(Spacer(1, 15 * mm))
 
         # Footer con notas importantes
@@ -196,11 +197,11 @@ class ProfessionalReceiptGenerator:
         story.append(Spacer(1, 8 * mm))
 
         # Tabla de productos
-        story.extend(self._create_products_table(order))
+        story.extend(self._create_products_table(order, settings.currency_code))
         story.append(Spacer(1, 10 * mm))
 
         # Resumen y total
-        story.extend(self._create_summary_section(order))
+        story.extend(self._create_summary_section(order, settings.currency_code))
         story.append(Spacer(1, 15 * mm))
 
         # Footer con notas importantes
@@ -392,7 +393,10 @@ class ProfessionalReceiptGenerator:
 
         return elements
 
-    def _create_products_table(self, order: Order):
+    def _create_products_table(
+            self,
+            order: Order,
+            currency_code: str = "GTQ"):
         """Crea la tabla de productos profesional"""
         elements = []
 
@@ -429,8 +433,8 @@ class ProfessionalReceiptGenerator:
                 product_name,
                 description,
                 format_quantity(item.quantity),
-                f"Q {item.unit_price:,.2f}",
-                f"Q {item.total_price:,.2f}"
+                format_currency(item.unit_price, currency_code),
+                format_currency(item.total_price, currency_code)
             ]
             table_data.append(row)
 
@@ -478,7 +482,10 @@ class ProfessionalReceiptGenerator:
 
         return elements
 
-    def _create_summary_section(self, order: Order):
+    def _create_summary_section(
+            self,
+            order: Order,
+            currency_code: str = "GTQ"):
         """Crea la sección de resumen y total"""
         elements = []
 
@@ -505,20 +512,20 @@ class ProfessionalReceiptGenerator:
         # Subtotal
         total_data.append([
             Paragraph("Subtotal:", self.styles['NormalText']),
-            Paragraph(f"Q {subtotal:,.2f}", self.styles['NormalText'])
+            Paragraph(format_currency(subtotal, currency_code), self.styles['NormalText'])
         ])
 
         # Descuento si aplica
         if order.discount_amount and order.discount_amount > 0:
             total_data.append([
                 Paragraph("Descuento:", self.styles['NormalText']),
-                Paragraph(f"-Q {order.discount_amount:,.2f}", self.styles['NormalText'])
+                Paragraph(f"-{format_currency(order.discount_amount, currency_code)}", self.styles['NormalText'])
             ])
 
         # Total final
         total_data.append([
             Paragraph("TOTAL DEL PEDIDO:", self.styles['TotalAmount']),
-            Paragraph(f"Q {order.total_amount:,.2f}", self.styles['TotalAmount'])
+            Paragraph(format_currency(order.total_amount, currency_code), self.styles['TotalAmount'])
         ])
 
         # Crear tabla de totales

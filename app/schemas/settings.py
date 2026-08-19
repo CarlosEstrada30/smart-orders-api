@@ -11,6 +11,7 @@ class SettingsBase(BaseModel):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     website: Optional[str] = None
+    currency_code: str = "GTQ"
     is_active: bool = True
 
 
@@ -26,6 +27,7 @@ class SettingsUpdate(BaseModel):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     website: Optional[str] = None
+    currency_code: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -53,3 +55,4 @@ class SettingsFormData(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     website: Optional[str] = None
+    currency_code: str = "GTQ"
