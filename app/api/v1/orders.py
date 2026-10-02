@@ -18,7 +18,11 @@ from ...services.compact_receipt_generator import CompactReceiptGenerator
 from ...services.orders_report_generator import OrdersReportGenerator
 from ...services.settings_service import SettingsService
 from ...services.payment_service import PaymentService
-from ...services.whatsapp_service import WhatsAppService
+from ...services.whatsapp_service import (
+    WhatsAppService,
+    WhatsAppDisconnectedError,
+    WhatsAppUnavailableError,
+)
 from ...models.order import OrderStatus
 from ...models.payment import OrderPaymentStatus
 from ..dependencies import get_order_service, get_settings_service, get_payment_service, get_whatsapp_service
@@ -761,6 +765,18 @@ def send_order_receipt_whatsapp(
     except HTTPException:
         # Re-raise HTTPExceptions (like 404, 400)
         raise
+    except WhatsAppDisconnectedError:
+        raise HTTPException(
+            status_code=503,
+            detail="WhatsApp está desconectado. Reconecte el dispositivo escaneando "
+                   "el código QR e intente de nuevo."
+        )
+    except WhatsAppUnavailableError:
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo contactar el servicio de WhatsApp. "
+                   "Intente de nuevo en unos minutos."
+        )
     except Exception as e:
         logger = logging.getLogger(__name__)
         logger.error(f"Error enviando comprobante por WhatsApp: {str(e)}")
