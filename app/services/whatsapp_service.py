@@ -11,6 +11,14 @@ from ..config import settings
 logger = logging.getLogger(__name__)
 
 
+class WhatsAppDisconnectedError(Exception):
+    """La sesión de WhatsApp en EvolutionAPI está cerrada; hay que reconectar el dispositivo."""
+
+
+class WhatsAppUnavailableError(Exception):
+    """EvolutionAPI no respondió o devolvió un error inesperado."""
+
+
 class WhatsAppService:
     """Service for sending WhatsApp messages through EvolutionAPI."""
 
@@ -296,7 +304,8 @@ class WhatsAppService:
 
         Raises:
             ValueError: Si la configuración de EvolutionAPI está incompleta
-            Exception: Si hay un error al enviar el documento
+            WhatsAppDisconnectedError: Si la sesión de WhatsApp está cerrada
+            WhatsAppUnavailableError: Si EvolutionAPI no responde o devuelve otro error
         """
         # Usar instance_name proporcionado o el de la configuración
         instance = instance_name
@@ -390,11 +399,19 @@ class WhatsAppService:
                 return result
 
         except httpx.HTTPStatusError as e:
+            # EvolutionAPI responde 500 "Connection Closed" cuando la sesión de WhatsApp se cayó
+            if "connection closed" in e.response.text.lower():
+                logger.warning(f"Sesión de WhatsApp cerrada en la instancia '{instance}'")
+                raise WhatsAppDisconnectedError(
+                    f"Sesión de WhatsApp cerrada en la instancia '{instance}'"
+                ) from e
             logger.error(f"Error HTTP al enviar documento: {e.response.status_code} - {e.response.text}")
-            raise Exception(f"Error al enviar documento: {e.response.status_code} - {e.response.text}")
+            raise WhatsAppUnavailableError(
+                f"Error al enviar documento: {e.response.status_code} - {e.response.text}"
+            ) from e
         except httpx.RequestError as e:
             logger.error(f"Error de conexión al enviar documento: {str(e)}")
-            raise Exception(f"Error de conexión con EvolutionAPI: {str(e)}")
+            raise WhatsAppUnavailableError(f"Error de conexión con EvolutionAPI: {str(e)}") from e
         except Exception as e:
             logger.error(f"Error inesperado al enviar documento: {str(e)}")
             raise
