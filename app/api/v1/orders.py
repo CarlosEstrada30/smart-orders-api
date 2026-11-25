@@ -1,5 +1,5 @@
 from typing import List, Optional, Union
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -28,6 +28,8 @@ from ...models.tenant import Tenant
 from ...models.user import User
 from ...utils.date_filters import validate_date_range
 from ...middleware import get_request_timezone
+from ...utils.timezone import get_current_time_in_timezone
+from ...config import settings as app_settings
 from ...utils.permissions import (
     can_create_orders, can_view_orders,
     can_update_delivery_status, can_update_stock_required_status,
@@ -35,6 +37,11 @@ from ...utils.permissions import (
 )
 
 router = APIRouter(prefix="/orders", tags=["orders"])
+
+# Rango por defecto (en días) del reporte PDF cuando no se envían fechas
+REPORT_DEFAULT_RANGE_DAYS = 30
+# Máximo de órdenes que se cargan para generar el reporte PDF
+REPORT_MAX_ORDERS = 10000
 
 
 # No additional schemas needed - using existing ones
@@ -806,49 +813,26 @@ def _parse_status_filter(
         )
 
 
-def _get_filtered_orders(order_service, db, status_enum,
-                         route_id, date_from, date_to, search,
-                         exclude_cancelled=False, client_timezone=None):
-    """Get orders with applied filters
+def _get_report_orders(order_service, db, status_enum,
+                       route_id, date_from, date_to, search,
+                       exclude_cancelled=False, client_timezone=None):
+    """Obtiene en una sola consulta las órdenes (ORM) para el reporte PDF.
 
     Args:
-        exclude_cancelled: If True and status_enum is None, exclude cancelled orders
-        client_timezone: Client timezone for date filtering in SQL
+        exclude_cancelled: Si es True, excluye las órdenes canceladas en SQL
+        client_timezone: Zona horaria del cliente para filtrar por fecha en SQL
     """
-    # If no status filter is specified and we should exclude cancelled orders,
-    # filter them out after getting the orders
-    if exclude_cancelled and status_enum is None:
-        # Get all orders without status filter
-        orders = order_service.get_orders_with_filters(
-            db,
-            skip=0,
-            limit=10000,  # Large limit to get all orders
-            status=None,  # No status filter
-            route_id=route_id,
-            date_from=date_from,
-            date_to=date_to,
-            search=search,
-            client_timezone=client_timezone
-        )
-        # Filter out cancelled orders
-        # Compare by value to handle both enum and string representations
-        if hasattr(OrderStatus.CANCELLED, 'value'):
-            cancelled_value = OrderStatus.CANCELLED.value
-        else:
-            cancelled_value = str(OrderStatus.CANCELLED)
-        orders = [order for order in orders if str(order.status) != cancelled_value]
-    else:
-        orders = order_service.get_orders_with_filters(
-            db,
-            skip=0,
-            limit=10000,  # Large limit to get all orders
-            status=status_enum,
-            route_id=route_id,
-            date_from=date_from,
-            date_to=date_to,
-            search=search,
-            client_timezone=client_timezone
-        )
+    orders = order_service.get_orders_for_report(
+        db,
+        limit=REPORT_MAX_ORDERS,
+        status=status_enum,
+        route_id=route_id,
+        date_from=date_from,
+        date_to=date_to,
+        search=search,
+        client_timezone=client_timezone,
+        exclude_cancelled=exclude_cancelled
+    )
 
     if not orders:
         raise HTTPException(
@@ -867,35 +851,6 @@ def _get_company_settings(settings_service, db):
             detail="Company settings not found. Please configure company information first."
         )
     return settings
-
-
-def _get_raw_orders(db, orders, exclude_cancelled=False):
-    """Convert order responses to raw order objects for PDF generation
-
-    Args:
-        exclude_cancelled: If True, exclude cancelled orders from the final list
-    """
-    from ...repositories.order_repository import OrderRepository
-    order_repo = OrderRepository()
-
-    order_ids = [order.id for order in orders]
-    raw_orders = []
-    for order_id in order_ids:
-        raw_order = order_repo.get(db, order_id)
-        if raw_order:
-            # Filter out cancelled orders if requested
-            # Compare status by value to handle both enum and string representations
-            if exclude_cancelled:
-                order_status_value = raw_order.status.value if hasattr(raw_order.status, 'value') else str(raw_order.status)
-                cancelled_value = OrderStatus.CANCELLED.value
-                if order_status_value == cancelled_value:
-                    continue
-            raw_orders.append(raw_order)
-
-    if not raw_orders:
-        raise HTTPException(status_code=404, detail="Orders not found")
-
-    return raw_orders
 
 
 def _generate_report_title(status_filter, route_id, date_from, date_to, db):
@@ -983,6 +938,14 @@ def download_orders_report_pdf(
 
         # Get client timezone - will be used in SQL query to convert created_at
         client_timezone = get_request_timezone(request) if request else None
+
+        # Si no se envía ningún filtro de fecha, limitar a los últimos 30 días
+        # para evitar cargar todo el historial en memoria (causa de OOM en Render)
+        if date_from is None and date_to is None:
+            date_to = get_current_time_in_timezone(
+                client_timezone or app_settings.DEFAULT_TIMEZONE).date()
+            date_from = date_to - timedelta(days=REPORT_DEFAULT_RANGE_DAYS - 1)
+
         # Pass dates directly - the repository will convert created_at in SQL
         date_from_utc = date_from
         date_to_utc = date_to
@@ -990,7 +953,7 @@ def download_orders_report_pdf(
         # Exclude cancelled orders unless explicitly filtering for cancelled status
         exclude_cancelled = status_enum != OrderStatus.CANCELLED
 
-        orders = _get_filtered_orders(
+        orders = _get_report_orders(
             order_service,
             db,
             status_enum,
@@ -1001,7 +964,6 @@ def download_orders_report_pdf(
             exclude_cancelled=exclude_cancelled,
             client_timezone=client_timezone)
         settings = _get_company_settings(settings_service, db)
-        raw_orders = _get_raw_orders(db, orders, exclude_cancelled=exclude_cancelled)
 
         report_title = _generate_report_title(
             status_filter, route_id, date_from, date_to, db)
@@ -1012,15 +974,16 @@ def download_orders_report_pdf(
         # Generate PDF buffer
         report_generator = OrdersReportGenerator()
         pdf_buffer = report_generator.generate_report_buffer(
-            raw_orders, settings, report_title, client_timezone)
+            orders, settings, report_title, client_timezone)
 
         # Set filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"reporte_ordenes_{timestamp}.pdf"
 
-        # Return as streaming response
+        # Return as streaming response (el buffer ya está en posición 0;
+        # no se copia para no duplicar el PDF en memoria)
         return StreamingResponse(
-            BytesIO(pdf_buffer.getvalue()),
+            pdf_buffer,
             media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename={filename}"}
         )

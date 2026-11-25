@@ -133,6 +133,39 @@ class OrderService:
         )
         return [self._process_order_response(order) for order in orders]
 
+    def get_orders_for_report(
+        self,
+        db: Session,
+        *,
+        limit: int,
+        status: Optional[OrderStatus] = None,
+        route_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        search: Optional[str] = None,
+        client_timezone: Optional[str] = None,
+        exclude_cancelled: bool = False
+    ) -> List[Order]:
+        """
+        Obtiene las órdenes (modelos ORM, con cliente, ruta e items ya cargados)
+        para generar reportes PDF en una sola consulta.
+
+        A diferencia de get_orders_with_filters, no convierte a OrderResponse,
+        para no duplicar los objetos en memoria.
+        """
+        return self.order_repository.get_orders_with_filters(
+            db,
+            skip=0,
+            limit=limit,
+            status=status,
+            route_id=route_id,
+            date_from=date_from,
+            date_to=date_to,
+            search=search,
+            client_timezone=client_timezone,
+            exclude_cancelled=exclude_cancelled
+        )
+
     def get_orders_paginated(
         self,
         db: Session,
