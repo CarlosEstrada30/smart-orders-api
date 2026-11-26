@@ -267,7 +267,8 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
         date_to: Optional[Union[date, datetime]] = None,
         search: Optional[str] = None,
         client_timezone: Optional[str] = None,
-        payment_status: Optional[OrderPaymentStatus] = None
+        payment_status: Optional[OrderPaymentStatus] = None,
+        exclude_cancelled: bool = False
     ) -> List[Order]:
         """Get orders with optional filters for status, route, date range, search, and payment status
 
@@ -275,6 +276,7 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             client_timezone: If provided, converts created_at to this timezone for date comparisons.
                             This allows filtering by date in the client's timezone regardless of
                             the database timezone.
+            exclude_cancelled: If True, excludes cancelled orders in the SQL query.
         """
         from ..models.client import Client
         from sqlalchemy import text
@@ -355,6 +357,9 @@ class OrderRepository(BaseRepository[Order, OrderCreate, OrderUpdate]):
             filters.append(
                 text("orders.payment_status = :payment_status").params(
                     payment_status=payment_status_value_lower))
+
+        if exclude_cancelled:
+            filters.append(Order.status != OrderStatus.CANCELLED)
 
         # Apply filters if any
         if filters:
